@@ -86,8 +86,10 @@ flowchart TD
   - `check_status(job_id: str) -> JobStatus`
 - **Supported Adapters**:
   - `MockVideoProvider`: Generates lightweight synthetic/color video clips with timestamp watermark for instant, free local testing and CI/CD.
-  - `Hugging FaceOmniFlashProvider`: Calls Google GenAI SDK for Hugging Face Serverless (Qwen-72B & FLUX.1) generation/editing.
-  - `KlingWanProvider`: Standard HTTP REST wrapper for Kling/Wan2.1 video generation APIs.
+  - `HuggingFaceVideoProvider` (`hf_video.py`): Open-weights video models (Wan2.1/CogVideoX-style) with deterministic mock fallback offline.
+  - `HuggingFaceScriptwriter` (`hf_llm.py`): Qwen-72B-class script planning adapter with offline fallback.
+  - `OmniFlash` / `KlingWan` → `FutureAdapter`: Planned vendor adapters; in v1.0.0 they run as mock-backed `FutureAdapter` shims (`kling_provider.py` mock-mode) so CI stays offline at $0 cost. No live vendor calls in tests.
+  - Delivery: HMAC-signed webhook fan-out via `delivery/dispatcher.py` (`DeliveryTarget`/`Receipt`, max 2 retries) reusing `api/webhooks.py` signatures.
 - **TTS & Captions**:
   - `EdgeTTSProvider`: High-quality, free multilingual voiceover synthesis (Vietnamese, English, etc.).
   - `WhisperSubtitleExtractor`: Generates JSON with word-level timestamps (`[{word: "Xin", start: 0.1, end: 0.3}, ...]`).

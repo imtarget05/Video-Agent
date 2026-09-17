@@ -88,11 +88,19 @@ Video-Agent/
 │   │   ├── cost/
 │   │   │   └── ledger.py       # SQLite Cost Accounting & CPFM Ledger
 │   │   ├── providers/
-│   │   │   ├── base.py         # Abstract Base Provider interface
+│   │   │   ├── base.py         # Abstract Base Provider interface (generate_clip + check_status)
 │   │   │   ├── mock_provider.py # Zero-cost deterministic offline provider
-│   │   │   └── gemini_video.py # Google Hugging Face Serverless (Qwen-72B & FLUX.1) adapter
+│   │   │   ├── hf_llm.py       # Hugging Face Qwen-72B scriptwriter adapter (offline fallback)
+│   │   │   ├── hf_video.py     # Hugging Face open-weights video adapter (mock fallback)
+│   │   │   ├── kling_provider.py # Kling/Wan2.1 REST adapter (FutureAdapter, mock-mode offline)
+│   │   │   ├── edge_tts_provider.py # Edge-TTS voiceover adapter (offline mock fallback)
+│   │   │   └── whisper_subtitles.py # Whisper word-timestamp extractor (offline fallback)
+│   │   ├── delivery/
+│   │   │   └── dispatcher.py   # HMAC-signed webhook fan-out (max 2 retries, DeliveryTarget/Receipt)
 │   │   └── api/
-│   │       └── server.py       # FastAPI REST API (Projects, HITL, Cost Audit)
+│   │       ├── server.py       # FastAPI REST API (Projects, HITL, Jobs, Cost Audit, Deliver/Subscribe)
+│   │       ├── store.py        # SQLite ProjectStore (list/status persistence)
+│   │       └── webhooks.py     # HMAC sign/verify + dispatch (max 2 retries)
 │   ├── tests/                  # Pytest unit & integration suite (16 tests)
 │   └── requirements.txt        # Python backend dependencies
 ├── remotion/

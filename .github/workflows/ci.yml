@@ -26,12 +26,23 @@ jobs:
           pip install -r backend/requirements.txt
 
       - name: Run Pytest suite
+        env:
+          MOCK_VIDEO: "true"
+          MOCK_TTS: "true"
         run: |
           pytest -v --tb=short
 
       - name: Run End-to-End Pipeline Demo
+        env:
+          MOCK_VIDEO: "true"
+          MOCK_TTS: "true"
         run: |
           python scripts/run_demo.py
+
+      - name: Assert render manifest
+        run: |
+          test -f remotion/render_manifest.json
+          python -c "import json; m=json.load(open('remotion/render_manifest.json')); assert 'scenes' in m or 'totalDurationSec' in m, 'invalid manifest'; print('manifest OK:', len(m.get('scenes', [])))"
 
   remotion-check:
     name: Remotion Bundle & TypeScript Check (Node.js)
