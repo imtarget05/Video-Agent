@@ -19,20 +19,31 @@ export const AudioTrack: React.FC<AudioTrackProps> = ({
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  void frame;
 
   if (!bgMusicUrl) {
     return null;
   }
 
-  // Calculate ducked volume when speech is actively present
-  const currentVolume = hasSpeech
-    ? duckingConfig.musicVolumeDucked
-    : duckingConfig.musicVolumeNormal;
+  const { musicVolumeNormal, musicVolumeDucked, duckDurationSec } = duckingConfig;
+  // Smooth ramp (up to 0.5s) derived from duckDurationSec so the music dips
+  // under speech instead of hard-cutting between two static levels.
+  const rampFrames = Math.max(
+    1,
+    Math.round(Math.min(duckDurationSec, 0.5) * fps)
+  );
 
   return (
     <Audio
       src={bgMusicUrl}
-      volume={(f) => currentVolume}
+      volume={(f) =>
+        hasSpeech
+          ? interpolate(f, [0, rampFrames], [musicVolumeNormal, musicVolumeDucked], {
+              extrapolateLeft: "clamp",
+              extrapolateRight: "clamp",
+            })
+          : musicVolumeNormal
+      }
     />
   );
 };
