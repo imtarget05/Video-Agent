@@ -28,6 +28,14 @@ class PipelineStatus(str, Enum):
     FAILED = "FAILED"
 
 
+class JobStatus(str, Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    MODERATION_BLOCKED = "MODERATION_BLOCKED"
+
+
 class WordTimestamp(BaseModel):
     word: str
     start: float
@@ -61,6 +69,7 @@ class CostRecord(BaseModel):
     cost_usd: float
     attempt_number: int = 1
     status: str = "SUCCESS"  # SUCCESS, FAILED, MODERATION_BLOCKED
+    prompt_tokens: int = 0
 
 
 class VideoProjectState(BaseModel):
@@ -78,3 +87,7 @@ class VideoProjectState(BaseModel):
     error_message: Optional[str] = None
     render_manifest: Optional[Dict[str, Any]] = None
     hitl_approved: bool = False
+    reformulated: bool = False
+    reformulation_count: int = 0
+    qc_passed: bool = False
+    qc_report: Optional[Dict[str, Any]] = None
