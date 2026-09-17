@@ -12,6 +12,8 @@ export interface AudioDuckingConfig {
 
 export type KenBurnsMotion = "zoomIn" | "zoomOut" | "panLeft" | "panRight";
 
+export type BRollLayout = "overlay" | "pip";
+
 export interface ManifestScene {
   sceneId: number;
   title: string;
@@ -23,6 +25,8 @@ export interface ManifestScene {
   voiceover: string;
   subtitles: WordTimestamp[];
   audioDucking?: AudioDuckingConfig;
+  bRollUrl?: string;
+  bRollLayout?: BRollLayout;
 }
 
 export interface VideoManifest {
