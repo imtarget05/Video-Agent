@@ -14,16 +14,18 @@ export interface ManifestScene {
   sceneId: number;
   title: string;
   videoUrl?: string;
+  audioUrl?: string;
   durationSec: number;
   voiceover: string;
   subtitles: WordTimestamp[];
-  audioDucking: AudioDuckingConfig;
+  audioDucking?: AudioDuckingConfig;
 }
 
 export interface VideoManifest {
   projectId: string;
   aspectRatio: "9:16" | "16:9";
   totalDurationSec: number;
+  bgMusicUrl?: string;
   scenes: ManifestScene[];
   transitionType?: string;
 }

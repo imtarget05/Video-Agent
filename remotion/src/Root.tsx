@@ -7,26 +7,32 @@ const defaultManifest916: VideoManifest = {
   projectId: "sample_proj_916",
   aspectRatio: "9:16",
   totalDurationSec: 15.0,
+  bgMusicUrl: "audio/bg_music.wav",
   scenes: [
     {
       sceneId: 1,
       title: "Hook",
-      durationSec: 4.0,
-      voiceover: "Bí quyết tự động hóa video",
+      durationSec: 5.0,
+      audioUrl: "audio/speech_scene_1.mp3",
+      voiceover: "Bạn có biết điều này về AI không?",
       subtitles: [
-        { word: "BÍ", start: 0.1, end: 0.6 },
-        { word: "QUYẾT", start: 0.7, end: 1.3 },
-        { word: "TỰ", start: 1.4, end: 2.0 },
-        { word: "ĐỘNG", start: 2.1, end: 2.7 },
-        { word: "HÓA", start: 2.8, end: 3.5 },
+        { word: "BẠN", start: 0.1, end: 0.6 },
+        { word: "CÓ", start: 0.7, end: 1.2 },
+        { word: "BIẾT", start: 1.3, end: 1.7 },
+        { word: "ĐIỀU", start: 1.8, end: 2.3 },
+        { word: "NÀY", start: 2.4, end: 2.8 },
+        { word: "VỀ", start: 2.9, end: 3.3 },
+        { word: "AI", start: 3.4, end: 4.1 },
+        { word: "KHÔNG", start: 4.2, end: 5.0 },
       ],
-      audioDucking: { musicVolumeNormal: 0.35, musicVolumeDucked: 0.1, duckDurationSec: 4.0 },
+      audioDucking: { musicVolumeNormal: 0.35, musicVolumeDucked: 0.1, duckDurationSec: 5.0 },
     },
     {
       sceneId: 2,
       title: "Core Solution",
-      durationSec: 6.0,
-      voiceover: "Hệ thống AI Agent kết hợp Remotion",
+      durationSec: 5.0,
+      audioUrl: "audio/speech_scene_2.mp3",
+      voiceover: "Hệ thống AI Agent kết hợp Remotion và Edge TTS",
       subtitles: [
         { word: "HỆ", start: 0.2, end: 0.8 },
         { word: "THỐNG", start: 0.9, end: 1.6 },
@@ -34,13 +40,14 @@ const defaultManifest916: VideoManifest = {
         { word: "AGENT", start: 2.4, end: 3.2 },
         { word: "REMOTION", start: 3.3, end: 4.5 },
       ],
-      audioDucking: { musicVolumeNormal: 0.35, musicVolumeDucked: 0.1, duckDurationSec: 6.0 },
+      audioDucking: { musicVolumeNormal: 0.35, musicVolumeDucked: 0.1, duckDurationSec: 5.0 },
     },
     {
       sceneId: 3,
       title: "CTA",
       durationSec: 5.0,
-      voiceover: "Theo dõi kênh ngay hôm nay",
+      audioUrl: "audio/speech_scene_3.mp3",
+      voiceover: "Theo dõi kênh ngay hôm nay để nhận thêm nhiều giải pháp!",
       subtitles: [
         { word: "THEO", start: 0.2, end: 0.9 },
         { word: "DÕI", start: 1.0, end: 1.8 },
@@ -64,19 +71,33 @@ export const RemotionRoot: React.FC = () => {
       <Composition
         id="Shorts916"
         component={MainVideo}
-        durationInFrames={450} // 15s * 30fps
+        durationInFrames={450}
         fps={30}
         width={1080}
         height={1920}
+        calculateMetadata={({ props }) => {
+          const m = (props as any).manifest || props;
+          const totalSec = m?.totalDurationSec || 15.0;
+          return {
+            durationInFrames: Math.max(1, Math.round(totalSec * 30)),
+          };
+        }}
         defaultProps={{ manifest: defaultManifest916 }}
       />
       <Composition
         id="Landscape169"
         component={MainVideo}
-        durationInFrames={450} // 15s * 30fps
+        durationInFrames={450}
         fps={30}
         width={1920}
         height={1080}
+        calculateMetadata={({ props }) => {
+          const m = (props as any).manifest || props;
+          const totalSec = m?.totalDurationSec || 15.0;
+          return {
+            durationInFrames: Math.max(1, Math.round(totalSec * 30)),
+          };
+        }}
         defaultProps={{ manifest: defaultManifest169 }}
       />
     </>

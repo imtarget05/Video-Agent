@@ -1,13 +1,19 @@
 import React from "react";
-import { Series, useVideoConfig, Video } from "remotion";
+import { Series, useVideoConfig, Video, Audio, staticFile } from "remotion";
 import { VideoManifest } from "../types";
 import { DynamicSubtitles } from "../components/DynamicSubtitles";
 
 interface MainVideoProps {
-  manifest: VideoManifest;
+  manifest?: VideoManifest;
+  projectId?: string;
+  aspectRatio?: "9:16" | "16:9";
+  totalDurationSec?: number;
+  bgMusicUrl?: string;
+  scenes?: any[];
 }
 
-export const MainVideo: React.FC<MainVideoProps> = ({ manifest }) => {
+export const MainVideo: React.FC<MainVideoProps> = (rawProps) => {
+  const manifest: VideoManifest = rawProps.manifest || (rawProps as VideoManifest);
   const { fps } = useVideoConfig();
   const isPortrait = manifest.aspectRatio === "9:16";
 
@@ -16,6 +22,9 @@ export const MainVideo: React.FC<MainVideoProps> = ({ manifest }) => {
     "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
     "linear-gradient(135deg, #18181b 0%, #27272a 100%)",
   ];
+
+  const bgMusic = manifest.bgMusicUrl || "audio/bg_music.wav";
+  const scenes = manifest.scenes || [];
 
   return (
     <div
@@ -26,8 +35,11 @@ export const MainVideo: React.FC<MainVideoProps> = ({ manifest }) => {
         overflow: "hidden",
       }}
     >
+      {/* Background Music Track */}
+      <Audio src={staticFile(bgMusic)} volume={0.12} loop />
+
       <Series>
-        {manifest.scenes.map((scene, idx) => {
+        {scenes.map((scene, idx) => {
           const durationFrames = Math.max(1, Math.round(scene.durationSec * fps));
           const bgGradient = defaultBackgroundGradients[idx % defaultBackgroundGradients.length];
 
@@ -44,6 +56,11 @@ export const MainVideo: React.FC<MainVideoProps> = ({ manifest }) => {
                   alignItems: "center",
                 }}
               >
+                {/* Scene Voiceover Speech Audio */}
+                {scene.audioUrl && (
+                  <Audio src={staticFile(scene.audioUrl)} volume={1.0} />
+                )}
+
                 {scene.videoUrl && scene.videoUrl.endsWith(".mp4") ? (
                   <Video
                     src={scene.videoUrl}
@@ -54,7 +71,6 @@ export const MainVideo: React.FC<MainVideoProps> = ({ manifest }) => {
                     }}
                   />
                 ) : (
-                  // Visual Placeholder card for synthetic mock preview
                   <div
                     style={{
                       display: "flex",
