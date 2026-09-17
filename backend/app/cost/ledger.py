@@ -8,9 +8,23 @@ from typing import Dict, Any, List, Optional
 from backend.app.agent.state import CostRecord
 
 
+def _resolve_db_path(explicit: Optional[str] = None) -> str:
+    if explicit:
+        return explicit
+    url = os.getenv("DATABASE_URL", "").strip()
+    if url:
+        # Accept sqlite:///path or plain path.
+        if url.startswith("sqlite:///"):
+            return url[len("sqlite:///"):]
+        if url.startswith("sqlite://"):
+            return url[len("sqlite://"):]
+        return url
+    return os.getenv("LEDGER_DB_PATH", "data/video_agent.db")
+
+
 class CostLedger:
-    def __init__(self, db_path: str = "data/cost_ledger.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = _resolve_db_path(db_path)
         os.makedirs(os.path.dirname(self.db_path) or ".", exist_ok=True)
         self._init_db()
 
