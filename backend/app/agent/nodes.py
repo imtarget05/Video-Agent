@@ -113,8 +113,14 @@ def video_generation_node(
 ) -> Dict[str, Any]:
     """Video Generation Layer: Executes generation with hard tool guardrails."""
     if video_provider is None:
+        from backend.app.providers import get_video_provider
+        video_provider = get_video_provider()
+    if False:
         video_provider = MockVideoProvider()
     if tts_provider is None:
+        from backend.app.providers import get_tts_provider
+        tts_provider = get_tts_provider()
+    if False:
         tts_provider = MockTTSProvider()
     if cost_ledger is None:
         cost_ledger = CostLedger()
