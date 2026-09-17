@@ -15,11 +15,11 @@ from uuid import uuid4
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Header, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.app.agent.state import VideoProjectState, AspectRatio, PipelineStatus
 from backend.app.agent.graph import video_agent_graph
@@ -59,6 +59,35 @@ app.mount("/public-assets", StaticFiles(directory=str(PUBLIC_DIR)), name="public
 # In-memory session store & cost ledger
 PROJECTS_STORE: Dict[str, VideoProjectState] = {}
 cost_ledger = CostLedger()
+
+# Slice C stores: async jobs + webhook subscriptions + rate-limit buckets
+JOBS_STORE: Dict[str, Dict[str, Any]] = {}
+WEBHOOK_SUBSCRIPTIONS: List[Dict[str, Any]] = []
+_RATE_BUCKETS: Dict[str, List[float]] = {}
+RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
+
+
+def require_api_key(x_api_key: Optional[str] = Header(default=None)):
+    """Optional API-key auth: enforced only when API_KEY env is set (offline tests stay open)."""
+    expected = os.getenv("API_KEY", "")
+    if not expected:
+        return True
+    if x_api_key != expected:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    return True
+
+
+def check_rate_limit(request: Request):
+    """Simple in-memory per-IP rate limiter (generous default so offline tests never trip)."""
+    import time as _time
+    client = request.client.host if request.client else "unknown"
+    now = _time.time()
+    window = [t for t in _RATE_BUCKETS.get(client, []) if now - t < 60.0]
+    if len(window) >= RATE_LIMIT_PER_MINUTE:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+    window.append(now)
+    _RATE_BUCKETS[client] = window
+    return True
 
 
 @app.get("/")
@@ -156,6 +185,18 @@ def approve_project(project_id: str, req: ApproveProjectRequest):
     }
 
 
+@app.get("/api/v1/projects", status_code=status.HTTP_200_OK)
+def list_projects():
+    """List all known project ids (in-memory + persisted store, best-effort)."""
+    ids = set(PROJECTS_STORE.keys())
+    try:
+        from backend.app.api.store import ProjectStore
+        ids.update(ProjectStore().list_ids())
+    except Exception:
+        pass
+    return sorted(ids)
+
+
 @app.get("/api/v1/projects/{project_id}", status_code=status.HTTP_200_OK)
 def get_project(project_id: str):
     if project_id not in PROJECTS_STORE:
@@ -189,6 +230,113 @@ def get_job_status(job_id: str, provider: str = "mock"):
     prov = providers.get(provider, providers["mock"])
     job_status = prov.check_status(job_id)
     return {"job_id": job_id, "provider": provider, "status": str(job_status.value if hasattr(job_status, "value") else job_status)}
+
+
+@app.get("/api/v1/projects/{project_id}/status", status_code=status.HTTP_200_OK)
+def get_project_status(project_id: str):
+    """Lightweight project status probe (Slice C)."""
+    if project_id not in PROJECTS_STORE:
+        raise HTTPException(status_code=404, detail="Project not found")
+    st = PROJECTS_STORE[project_id]
+    return {"project_id": project_id, "status": str(st.status.value if hasattr(st.status, "value") else st.status),
+            "hitl_approved": st.hitl_approved, "scenes_count": len(st.scenes)}
+
+
+class RejectProjectRequest(BaseModel):
+    feedback: Optional[str] = None
+
+
+@app.post("/api/v1/projects/{project_id}/reject", status_code=status.HTTP_200_OK)
+def reject_project(project_id: str, req: RejectProjectRequest):
+    """Explicit supervisor rejection (Slice C)."""
+    if project_id not in PROJECTS_STORE:
+        raise HTTPException(status_code=404, detail="Project not found")
+    st = PROJECTS_STORE[project_id]
+    st.status = PipelineStatus.FAILED
+    st.error_message = req.feedback or "Rejected by supervisor"
+    PROJECTS_STORE[project_id] = st
+    return {"project_id": project_id, "status": str(st.status.value), "error_message": st.error_message}
+
+
+class CreateJobRequest(BaseModel):
+    prompt: str = "a calm lake"
+    duration_sec: float = 4.0
+    provider: str = "mock"
+
+
+@app.post("/api/v1/jobs", status_code=status.HTTP_202_ACCEPTED)
+def create_job(req: CreateJobRequest, request: Request,
+               _rl: bool = Depends(check_rate_limit)):
+    """Create an async generation job; poll via GET /api/v1/jobs/{job_id} (Slice C)."""
+    job_id = f"job_{uuid4().hex[:8]}"
+    JOBS_STORE[job_id] = {"job_id": job_id, "prompt": req.prompt,
+                          "duration_sec": req.duration_sec, "provider": req.provider,
+                          "status": "PENDING"}
+    return {"job_id": job_id, "provider": req.provider, "status": "PENDING"}
+
+
+@app.get("/api/v1/jobs/{job_id}", status_code=status.HTTP_200_OK)
+def get_async_job(job_id: str, provider: str = "mock"):
+    """Poll an async job created via POST /api/v1/jobs (falls back to provider check_status)."""
+    stored = JOBS_STORE.get(job_id)
+    prov_name = stored["provider"] if stored else provider
+    from backend.app.providers.mock_provider import MockVideoProvider
+    from backend.app.providers.hf_video import HuggingFaceVideoProvider
+    providers = {"mock": MockVideoProvider(), "hf": HuggingFaceVideoProvider()}
+    try:
+        from backend.app.providers.kling_provider import KlingWanProvider
+        providers["kling"] = KlingWanProvider()
+    except Exception:
+        pass
+    prov = providers.get(prov_name, providers["mock"])
+    job_status = prov.check_status(job_id)
+    live = str(job_status.value if hasattr(job_status, "value") else job_status)
+    if stored:
+        stored["status"] = live
+        return {"job_id": job_id, "provider": prov_name, "status": live}
+    return {"job_id": job_id, "provider": prov_name, "status": live}
+
+
+class SubscribeRequest(BaseModel):
+    url: str
+    events: Optional[List[str]] = None
+
+
+@app.post("/api/v1/webhooks/subscribe", status_code=status.HTTP_201_CREATED)
+def subscribe_webhook(req: SubscribeRequest, _auth: bool = Depends(require_api_key),
+                      _rl: bool = Depends(check_rate_limit)):
+    """Subscribe a URL to project event webhooks (Slice C)."""
+    entry = {"url": req.url, "events": req.events or ["project.completed"]}
+    if entry not in WEBHOOK_SUBSCRIPTIONS:
+        WEBHOOK_SUBSCRIPTIONS.append(entry)
+    return {"subscribed": True, "subscription": entry}
+
+
+@app.get("/api/v1/webhooks/subscriptions", status_code=status.HTTP_200_OK)
+def list_subscriptions():
+    return WEBHOOK_SUBSCRIPTIONS
+
+
+class DeliverRequest(BaseModel):
+    project_id: str
+    targets: List[str] = Field(default_factory=list)
+    event: str = "project.completed"
+
+
+@app.post("/api/v1/deliver", status_code=status.HTTP_200_OK)
+def deliver_project(req: DeliverRequest, _auth: bool = Depends(require_api_key),
+                    _rl: bool = Depends(check_rate_limit)):
+    """Fan-out signed delivery receipts to target URLs via dispatcher (Slice C)."""
+    from backend.app.delivery.dispatcher import DeliveryTarget, deliver_all
+    payload = json.dumps({"project_id": req.project_id, "event": req.event}).encode()
+    targets = [DeliveryTarget(url=u) for u in req.targets]
+    receipts = deliver_all(targets, payload, timeout_sec=2.0)
+    # Also notify stored subscribers when no explicit targets given.
+    if not targets and WEBHOOK_SUBSCRIPTIONS:
+        subs = [DeliveryTarget(url=s["url"]) for s in WEBHOOK_SUBSCRIPTIONS]
+        receipts = deliver_all(subs, payload, timeout_sec=2.0)
+    return {"project_id": req.project_id, "event": req.event,
+            "receipts": [r.model_dump() for r in receipts]}
 
 
 # -------------------------------------------------------------
