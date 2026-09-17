@@ -144,13 +144,15 @@ def video_generation_node(
             }
 
         clip_data = guard_res.data
+        prompt_tokens = len((scene.visual_prompt or "").split())
         rec = CostRecord(
             job_id=f"job_{state.project_id}_s{scene.scene_id}",
             provider=clip_data.provider_name,
             duration_sec=clip_data.duration_sec,
             cost_usd=clip_data.cost_usd,
             attempt_number=guard_res.attempts_made,
-            status=guard_res.status
+            status=guard_res.status,
+            prompt_tokens=prompt_tokens
         )
         cost_records.append(rec)
         cost_ledger.record_cost(state.project_id, rec)
@@ -218,7 +220,39 @@ def qc_audit_node(
         approved_final_seconds=total_duration
     )
 
+    checks = []
+    # 1. Every scene must have a rendered clip.
+    missing_clip = [s.scene_id for s in state.scenes if not s.video_clip_url]
+    checks.append({"name": "clips_present", "passed": not missing_clip, "detail": f"missing={missing_clip}"})
+    # 2. Subtitle coverage: each scene with voiceover should carry word timestamps.
+    bad_subs = [s.scene_id for s in state.scenes if s.voiceover_text and not s.word_timestamps]
+    checks.append({"name": "subtitle_coverage", "passed": not bad_subs, "detail": f"missing_subs={bad_subs}"})
+    # 3. Word timestamp monotonicity (desync guard).
+    desync = []
+    for s in state.scenes:
+        ts = s.word_timestamps or []
+        for a, b in zip(ts, ts[1:]):
+            if not (a.start <= a.end <= b.end and a.start <= b.start):
+                desync.append(s.scene_id)
+                break
+    checks.append({"name": "av_sync_monotonic", "passed": not desync, "detail": f"desync={desync}"})
+    # 4. Duration sanity (no black-frame zero scenes).
+    bad_dur = [s.scene_id for s in state.scenes if s.duration_sec <= 0]
+    checks.append({"name": "duration_sanity", "passed": not bad_dur, "detail": f"bad_duration={bad_dur}"})
+
+    qc_passed = all(c["passed"] for c in checks)
+    qc_report = {
+        "project_id": state.project_id,
+        "total_duration_sec": round(total_duration, 2),
+        "checks": checks,
+        "metrics": {
+            "cost_per_finished_minute": metrics["cost_per_finished_minute"],
+            "total_spend_usd": metrics["total_spend_usd"],
+        },
+    }
     return {
         "cost_per_finished_minute": metrics["cost_per_finished_minute"],
-        "status": PipelineStatus.COMPLETED
+        "qc_passed": qc_passed,
+        "qc_report": qc_report,
+        "status": PipelineStatus.COMPLETED if qc_passed else PipelineStatus.FAILED,
     }
