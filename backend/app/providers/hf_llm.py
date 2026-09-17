@@ -7,7 +7,10 @@ import json
 import os
 import re
 from typing import List, Dict, Any, Optional
+from dotenv import load_dotenv
 from huggingface_hub import InferenceClient
+
+load_dotenv()
 
 
 class HuggingFaceScriptwriter:

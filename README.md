@@ -121,7 +121,33 @@ Video-Agent/
 - Python 3.11+
 - Node.js 18+ and npm
 
-### 2. Backend Setup
+### 2. ⚡ One-Command Studio Launch (Canvas UI + Remotion)
+```bash
+./run_studio.sh
+```
+- **Semantic Workflow Canvas UI**: `http://localhost:8000/` (or `http://localhost:8000/canvas`)
+- **Remotion Timeline Studio**: `http://localhost:3000/`
+- **FastAPI OpenAPI Swagger**: `http://localhost:8000/docs`
+
+---
+
+## 🎨 Semantic Workflow Canvas Studio (Chinese AI Studio Style)
+
+Inspired by modern Asian AI creative platforms (Kling AI, Jimeng, LiblibAI, Jianying AI Workflows), the **Video-Agent Studio** provides a visual, node-based pipeline designed for YouTube (16:9) and TikTok/Shorts (9:16):
+
+```text
+[Input Prompt / Brief]
+        ↓
+[Node 1: Character Studio] ──→ Locks Face / Invariant DNA & 3 Visual Anchors
+        ↓
+[Node 2: World & Atmosphere] ──→ Art Style (Cinematic/Cyberpunk), Edge-TTS Voice, BGM Ducking
+        ↓
+[Node 3: Semantic Shot Sequence] ──→ 3-Act Breakdown (Hook ➜ Core ➜ CTA), Ken Burns motion
+        ↓
+[Node 4: Remotion Video Player] ──→ Real-time MP4 render, Karaoke Subtitles, Download
+```
+
+### 3. Backend Setup & Pytest Verification
 ```bash
 # Clone and enter project directory
 cd Video-Agent
@@ -137,11 +163,6 @@ pip install -r backend/requirements.txt
 pytest -v --tb=short
 ```
 
-### 3. Run the Autonomous End-to-End Demo
-```bash
-python scripts/run_demo.py
-```
-
 ### 4. Remotion Video Composition Engine
 ```bash
 cd remotion
@@ -155,12 +176,6 @@ npm run bundle
 # Open interactive Remotion preview in browser
 npm run start
 ```
-
-### 5. Launch FastAPI REST Server
-```bash
-uvicorn backend.app.api.server:app --host 0.0.0.0 --port 8000 --reload
-```
-Interactive Swagger API documentation available at: `http://localhost:8000/docs`.
 
 ---
 

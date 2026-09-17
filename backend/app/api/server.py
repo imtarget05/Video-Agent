@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 from uuid import uuid4
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
