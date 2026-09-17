@@ -43,6 +43,11 @@ class BaseVideoProvider(ABC):
     ) -> GeneratedClip:
         pass
 
+    def check_status(self, job_id: str):
+        """Poll async generation job. Default: synchronous providers report SUCCEEDED."""
+        from backend.app.agent.state import JobStatus
+        return JobStatus.SUCCEEDED
+
 
 class BaseTTSProvider(ABC):
     @property

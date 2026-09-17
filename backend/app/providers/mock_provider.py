@@ -58,6 +58,14 @@ class MockVideoProvider(BaseVideoProvider):
             }
         )
 
+    def check_status(self, job_id: str):
+        from backend.app.agent.state import JobStatus
+        if self.simulate_failure == "MODERATION":
+            return JobStatus.MODERATION_BLOCKED
+        if self.simulate_failure == "500":
+            return JobStatus.FAILED
+        return JobStatus.SUCCEEDED
+
 
 class MockTTSProvider(BaseTTSProvider):
     @property

@@ -54,3 +54,10 @@ class HuggingFaceVideoProvider(BaseVideoProvider):
             provider_name=self.provider_name,
             metadata={"mode": "hf_inference_video", "seed": seed}
         )
+
+    def check_status(self, job_id: str):
+        from backend.app.agent.state import JobStatus
+        if not self.hf_token or os.getenv("MOCK_VIDEO", "false").lower() == "true":
+            return JobStatus.SUCCEEDED
+        # Synchronous REST wrapper in this slice: job completes inline.
+        return JobStatus.SUCCEEDED
