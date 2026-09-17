@@ -1,0 +1,20 @@
+{
+  "name": "video-agent-remotion",
+  "version": "1.0.0",
+  "description": "Code-based video assembly and composition engine for Video-Agent",
+  "scripts": {
+    "start": "remotion preview src/index.ts",
+    "build": "remotion render src/index.ts Shorts916 out/shorts.mp4",
+    "bundle": "remotion bundle src/index.ts"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "remotion": "^4.0.218"
+  },
+  "devDependencies": {
+    "@remotion/cli": "^4.0.218",
+    "@types/react": "^18.2.0",
+    "typescript": "^5.3.3"
+  }
+}

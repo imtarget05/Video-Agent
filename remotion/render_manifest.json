@@ -1,0 +1,340 @@
+{
+  "projectId": "demo_shorts_001",
+  "aspectRatio": "9:16",
+  "totalDurationSec": 15.0,
+  "scenes": [
+    {
+      "sceneId": 1,
+      "title": "Hook",
+      "videoUrl": "/data/rendered/clip_2026_4.mp4",
+      "durationSec": 4.0,
+      "voiceover": "Bạn có biết điều này về 3 Bước Xây Dựng Hệ Thống Video AI Tự Động Hóa 2026 không?",
+      "subtitles": [
+        {
+          "word": "Bạn",
+          "start": 0.0,
+          "end": 0.35
+        },
+        {
+          "word": "có",
+          "start": 0.35,
+          "end": 0.7
+        },
+        {
+          "word": "biết",
+          "start": 0.7,
+          "end": 1.05
+        },
+        {
+          "word": "điều",
+          "start": 1.05,
+          "end": 1.4
+        },
+        {
+          "word": "này",
+          "start": 1.4,
+          "end": 1.75
+        },
+        {
+          "word": "về",
+          "start": 1.75,
+          "end": 2.1
+        },
+        {
+          "word": "3",
+          "start": 2.1,
+          "end": 2.45
+        },
+        {
+          "word": "Bước",
+          "start": 2.45,
+          "end": 2.8
+        },
+        {
+          "word": "Xây",
+          "start": 2.8,
+          "end": 3.15
+        },
+        {
+          "word": "Dựng",
+          "start": 3.15,
+          "end": 3.5
+        },
+        {
+          "word": "Hệ",
+          "start": 3.5,
+          "end": 3.85
+        },
+        {
+          "word": "Thống",
+          "start": 3.85,
+          "end": 4.2
+        },
+        {
+          "word": "Video",
+          "start": 4.2,
+          "end": 4.55
+        },
+        {
+          "word": "AI",
+          "start": 4.55,
+          "end": 4.9
+        },
+        {
+          "word": "Tự",
+          "start": 4.9,
+          "end": 5.25
+        },
+        {
+          "word": "Động",
+          "start": 5.25,
+          "end": 5.6
+        },
+        {
+          "word": "Hóa",
+          "start": 5.6,
+          "end": 5.95
+        },
+        {
+          "word": "2026",
+          "start": 5.95,
+          "end": 6.3
+        },
+        {
+          "word": "không",
+          "start": 6.3,
+          "end": 6.65
+        }
+      ],
+      "audioDucking": {
+        "musicVolumeNormal": 0.35,
+        "musicVolumeDucked": 0.1,
+        "duckDurationSec": 4.0
+      }
+    },
+    {
+      "sceneId": 2,
+      "title": "Value Core",
+      "videoUrl": "/data/rendered/clip_2026_6.mp4",
+      "durationSec": 6.0,
+      "voiceover": "Đây là giải pháp công nghệ giúp tối ưu hóa toàn diện 3 Bước Xây Dựng Hệ Thống Video AI Tự Động Hóa 2026.",
+      "subtitles": [
+        {
+          "word": "Đây",
+          "start": 0.0,
+          "end": 0.35
+        },
+        {
+          "word": "là",
+          "start": 0.35,
+          "end": 0.7
+        },
+        {
+          "word": "giải",
+          "start": 0.7,
+          "end": 1.05
+        },
+        {
+          "word": "pháp",
+          "start": 1.05,
+          "end": 1.4
+        },
+        {
+          "word": "công",
+          "start": 1.4,
+          "end": 1.75
+        },
+        {
+          "word": "nghệ",
+          "start": 1.75,
+          "end": 2.1
+        },
+        {
+          "word": "giúp",
+          "start": 2.1,
+          "end": 2.45
+        },
+        {
+          "word": "tối",
+          "start": 2.45,
+          "end": 2.8
+        },
+        {
+          "word": "ưu",
+          "start": 2.8,
+          "end": 3.15
+        },
+        {
+          "word": "hóa",
+          "start": 3.15,
+          "end": 3.5
+        },
+        {
+          "word": "toàn",
+          "start": 3.5,
+          "end": 3.85
+        },
+        {
+          "word": "diện",
+          "start": 3.85,
+          "end": 4.2
+        },
+        {
+          "word": "3",
+          "start": 4.2,
+          "end": 4.55
+        },
+        {
+          "word": "Bước",
+          "start": 4.55,
+          "end": 4.9
+        },
+        {
+          "word": "Xây",
+          "start": 4.9,
+          "end": 5.25
+        },
+        {
+          "word": "Dựng",
+          "start": 5.25,
+          "end": 5.6
+        },
+        {
+          "word": "Hệ",
+          "start": 5.6,
+          "end": 5.95
+        },
+        {
+          "word": "Thống",
+          "start": 5.95,
+          "end": 6.3
+        },
+        {
+          "word": "Video",
+          "start": 6.3,
+          "end": 6.65
+        },
+        {
+          "word": "AI",
+          "start": 6.65,
+          "end": 7.0
+        },
+        {
+          "word": "Tự",
+          "start": 7.0,
+          "end": 7.35
+        },
+        {
+          "word": "Động",
+          "start": 7.35,
+          "end": 7.7
+        },
+        {
+          "word": "Hóa",
+          "start": 7.7,
+          "end": 8.05
+        },
+        {
+          "word": "2026",
+          "start": 8.05,
+          "end": 8.4
+        }
+      ],
+      "audioDucking": {
+        "musicVolumeNormal": 0.35,
+        "musicVolumeDucked": 0.1,
+        "duckDurationSec": 6.0
+      }
+    },
+    {
+      "sceneId": 3,
+      "title": "Call To Action",
+      "videoUrl": "/data/rendered/clip_2026_5.mp4",
+      "durationSec": 5.0,
+      "voiceover": "Theo dõi ngay để cập nhật thêm nhiều giải pháp tự động hóa đột phá!",
+      "subtitles": [
+        {
+          "word": "Theo",
+          "start": 0.0,
+          "end": 0.35
+        },
+        {
+          "word": "dõi",
+          "start": 0.35,
+          "end": 0.7
+        },
+        {
+          "word": "ngay",
+          "start": 0.7,
+          "end": 1.05
+        },
+        {
+          "word": "để",
+          "start": 1.05,
+          "end": 1.4
+        },
+        {
+          "word": "cập",
+          "start": 1.4,
+          "end": 1.75
+        },
+        {
+          "word": "nhật",
+          "start": 1.75,
+          "end": 2.1
+        },
+        {
+          "word": "thêm",
+          "start": 2.1,
+          "end": 2.45
+        },
+        {
+          "word": "nhiều",
+          "start": 2.45,
+          "end": 2.8
+        },
+        {
+          "word": "giải",
+          "start": 2.8,
+          "end": 3.15
+        },
+        {
+          "word": "pháp",
+          "start": 3.15,
+          "end": 3.5
+        },
+        {
+          "word": "tự",
+          "start": 3.5,
+          "end": 3.85
+        },
+        {
+          "word": "động",
+          "start": 3.85,
+          "end": 4.2
+        },
+        {
+          "word": "hóa",
+          "start": 4.2,
+          "end": 4.55
+        },
+        {
+          "word": "đột",
+          "start": 4.55,
+          "end": 4.9
+        },
+        {
+          "word": "phá",
+          "start": 4.9,
+          "end": 5.25
+        }
+      ],
+      "audioDucking": {
+        "musicVolumeNormal": 0.35,
+        "musicVolumeDucked": 0.1,
+        "duckDurationSec": 5.0
+      }
+    }
+  ],
+  "transitionType": "fade"
+}
