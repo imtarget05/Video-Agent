@@ -10,10 +10,14 @@ export interface AudioDuckingConfig {
   duckDurationSec: number;
 }
 
+export type KenBurnsMotion = "zoomIn" | "zoomOut" | "panLeft" | "panRight";
+
 export interface ManifestScene {
   sceneId: number;
   title: string;
   videoUrl?: string;
+  imageUrl?: string;
+  kenBurnsEffect?: KenBurnsMotion;
   audioUrl?: string;
   durationSec: number;
   voiceover: string;

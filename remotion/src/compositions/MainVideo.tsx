@@ -2,6 +2,7 @@ import React from "react";
 import { Series, useVideoConfig, Video, Audio, staticFile } from "remotion";
 import { VideoManifest } from "../types";
 import { DynamicSubtitles } from "../components/DynamicSubtitles";
+import { KenBurnsImage } from "../components/KenBurnsImage";
 
 interface MainVideoProps {
   manifest?: VideoManifest;
@@ -56,12 +57,14 @@ export const MainVideo: React.FC<MainVideoProps> = (rawProps) => {
                   alignItems: "center",
                 }}
               >
-                {/* Scene Voiceover Speech Audio */}
-                {scene.audioUrl && (
-                  <Audio src={staticFile(scene.audioUrl)} volume={1.0} />
-                )}
-
-                {scene.videoUrl && scene.videoUrl.endsWith(".mp4") ? (
+                {/* Visual Media Layer: Real AI Image with Ken Burns OR Video Clip */}
+                {scene.imageUrl ? (
+                  <KenBurnsImage
+                    imageSrc={scene.imageUrl}
+                    durationFrames={durationFrames}
+                    motion={scene.kenBurnsEffect || (idx % 2 === 0 ? "zoomIn" : "panLeft")}
+                  />
+                ) : scene.videoUrl && scene.videoUrl.endsWith(".mp4") ? (
                   <Video
                     src={scene.videoUrl}
                     style={{
@@ -90,17 +93,12 @@ export const MainVideo: React.FC<MainVideoProps> = (rawProps) => {
                     >
                       Scene #{scene.sceneId}: {scene.title}
                     </div>
-                    <div
-                      style={{
-                        fontSize: isPortrait ? 28 : 20,
-                        color: "#94A3B8",
-                        maxWidth: "80%",
-                        textAlign: "center",
-                      }}
-                    >
-                      Duration: {scene.durationSec}s
-                    </div>
                   </div>
+                )}
+
+                {/* Scene Voiceover Speech Audio */}
+                {scene.audioUrl && (
+                  <Audio src={staticFile(scene.audioUrl)} volume={1.0} />
                 )}
 
                 {/* Bottom Shadow Gradient for Subtitle Readability */}
@@ -110,13 +108,13 @@ export const MainVideo: React.FC<MainVideoProps> = (rawProps) => {
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    height: isPortrait ? "40%" : "30%",
-                    background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%)",
+                    height: isPortrait ? "45%" : "35%",
+                    background: "linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.65) 45%, transparent 100%)",
                     pointerEvents: "none",
                   }}
                 />
 
-                {/* Word-level dynamic subtitles */}
+                {/* Word-level dynamic kinetic subtitles */}
                 <DynamicSubtitles
                   subtitles={scene.subtitles}
                   isPortrait={isPortrait}

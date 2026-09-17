@@ -1,5 +1,5 @@
 {
-  "projectId": "custom_prompt_video",
+  "projectId": "ai_income_2026",
   "aspectRatio": "9:16",
   "totalDurationSec": 17.8,
   "bgMusicUrl": "audio/bg_music.wav",
@@ -7,294 +7,165 @@
     {
       "sceneId": 1,
       "title": "Hook",
-      "durationSec": 6.12,
+      "durationSec": 5.2,
+      "imageUrl": "images/scene_1.jpg",
+      "kenBurnsEffect": "zoomIn",
       "audioUrl": "audio/speech_scene_1.mp3",
       "voiceover": "Bạn có biết điều này về 3 cách kiếm tiền bằng AI năm 2026 không?",
       "subtitles": [
         {
           "word": "BẠN",
-          "start": 0.0,
-          "end": 0.37
+          "start": 0.1,
+          "end": 0.5
         },
         {
           "word": "CÓ",
-          "start": 0.37,
-          "end": 0.74
+          "start": 0.6,
+          "end": 1.0
         },
         {
           "word": "BIẾT",
-          "start": 0.74,
-          "end": 1.11
+          "start": 1.1,
+          "end": 1.5
         },
         {
           "word": "ĐIỀU",
-          "start": 1.11,
-          "end": 1.48
+          "start": 1.6,
+          "end": 2.0
         },
         {
           "word": "NÀY",
-          "start": 1.48,
-          "end": 1.85
+          "start": 2.1,
+          "end": 2.5
         },
         {
           "word": "VỀ",
-          "start": 1.85,
-          "end": 2.22
-        },
-        {
-          "word": "3",
-          "start": 2.22,
-          "end": 2.59
-        },
-        {
-          "word": "CÁCH",
-          "start": 2.59,
-          "end": 2.96
-        },
-        {
-          "word": "KIẾM",
-          "start": 2.96,
-          "end": 3.33
-        },
-        {
-          "word": "TIỀN",
-          "start": 3.33,
-          "end": 3.7
-        },
-        {
-          "word": "BẰNG",
-          "start": 3.7,
-          "end": 4.07
+          "start": 2.6,
+          "end": 3.0
         },
         {
           "word": "AI",
-          "start": 4.07,
-          "end": 4.44
-        },
-        {
-          "word": "NĂM",
-          "start": 4.44,
-          "end": 4.81
-        },
-        {
-          "word": "2026",
-          "start": 4.81,
-          "end": 5.18
+          "start": 3.1,
+          "end": 3.8
         },
         {
           "word": "KHÔNG?",
-          "start": 5.18,
-          "end": 5.55
+          "start": 3.9,
+          "end": 4.7
         }
-      ],
-      "audioDucking": {
-        "musicVolumeNormal": 0.3,
-        "musicVolumeDucked": 0.1,
-        "duckDurationSec": 6.12
-      }
+      ]
     },
     {
       "sceneId": 2,
       "title": "Value Core",
-      "durationSec": 6.93,
+      "durationSec": 6.8,
+      "imageUrl": "images/scene_2.jpg",
+      "kenBurnsEffect": "panLeft",
       "audioUrl": "audio/speech_scene_2.mp3",
-      "voiceover": "Đây là giải pháp công nghệ giúp tối ưu hóa toàn diện 3 cách kiếm tiền bằng AI năm 2026.",
+      "voiceover": "Đây là giải pháp công nghệ giúp tối ưu hóa toàn diện tự động hóa với AI.",
       "subtitles": [
         {
           "word": "ĐÂY",
-          "start": 0.0,
-          "end": 0.32
+          "start": 0.1,
+          "end": 0.6
         },
         {
           "word": "LÀ",
-          "start": 0.32,
-          "end": 0.64
+          "start": 0.7,
+          "end": 1.2
         },
         {
           "word": "GIẢI",
-          "start": 0.64,
-          "end": 0.96
+          "start": 1.3,
+          "end": 1.8
         },
         {
           "word": "PHÁP",
-          "start": 0.96,
-          "end": 1.28
+          "start": 1.9,
+          "end": 2.4
         },
         {
           "word": "CÔNG",
-          "start": 1.28,
-          "end": 1.6
+          "start": 2.5,
+          "end": 3.0
         },
         {
           "word": "NGHỆ",
-          "start": 1.6,
-          "end": 1.92
+          "start": 3.1,
+          "end": 3.7
         },
         {
-          "word": "GIÚP",
-          "start": 1.92,
-          "end": 2.24
+          "word": "TỰ",
+          "start": 3.8,
+          "end": 4.4
         },
         {
-          "word": "TỐI",
-          "start": 2.24,
-          "end": 2.56
-        },
-        {
-          "word": "ƯU",
-          "start": 2.56,
-          "end": 2.88
+          "word": "ĐỘNG",
+          "start": 4.5,
+          "end": 5.2
         },
         {
           "word": "HÓA",
-          "start": 2.88,
-          "end": 3.2
-        },
-        {
-          "word": "TOÀN",
-          "start": 3.2,
-          "end": 3.52
-        },
-        {
-          "word": "DIỆN",
-          "start": 3.52,
-          "end": 3.84
-        },
-        {
-          "word": "3",
-          "start": 3.84,
-          "end": 4.16
-        },
-        {
-          "word": "CÁCH",
-          "start": 4.16,
-          "end": 4.48
-        },
-        {
-          "word": "KIẾM",
-          "start": 4.48,
-          "end": 4.8
-        },
-        {
-          "word": "TIỀN",
-          "start": 4.8,
-          "end": 5.12
-        },
-        {
-          "word": "BẰNG",
-          "start": 5.12,
-          "end": 5.44
-        },
-        {
-          "word": "AI",
-          "start": 5.44,
-          "end": 5.76
-        },
-        {
-          "word": "NĂM",
-          "start": 5.76,
-          "end": 6.08
-        },
-        {
-          "word": "2026.",
-          "start": 6.08,
-          "end": 6.4
+          "start": 5.3,
+          "end": 6.2
         }
-      ],
-      "audioDucking": {
-        "musicVolumeNormal": 0.3,
-        "musicVolumeDucked": 0.1,
-        "duckDurationSec": 6.93
-      }
+      ]
     },
     {
       "sceneId": 3,
       "title": "Call To Action",
-      "durationSec": 4.75,
+      "durationSec": 5.8,
+      "imageUrl": "images/scene_3.jpg",
+      "kenBurnsEffect": "zoomOut",
       "audioUrl": "audio/speech_scene_3.mp3",
       "voiceover": "Theo dõi ngay để cập nhật thêm nhiều giải pháp tự động hóa đột phá!",
       "subtitles": [
         {
           "word": "THEO",
-          "start": 0.0,
-          "end": 0.28
+          "start": 0.1,
+          "end": 0.6
         },
         {
           "word": "DÕI",
-          "start": 0.28,
-          "end": 0.56
+          "start": 0.7,
+          "end": 1.2
         },
         {
           "word": "NGAY",
-          "start": 0.56,
-          "end": 0.84
+          "start": 1.3,
+          "end": 1.9
         },
         {
           "word": "ĐỂ",
-          "start": 0.84,
-          "end": 1.12
+          "start": 2.0,
+          "end": 2.5
         },
         {
           "word": "CẬP",
-          "start": 1.12,
-          "end": 1.4
+          "start": 2.6,
+          "end": 3.2
         },
         {
           "word": "NHẬT",
-          "start": 1.4,
-          "end": 1.68
+          "start": 3.3,
+          "end": 3.8
         },
         {
           "word": "THÊM",
-          "start": 1.68,
-          "end": 1.96
-        },
-        {
-          "word": "NHIỀU",
-          "start": 1.96,
-          "end": 2.24
+          "start": 3.9,
+          "end": 4.4
         },
         {
           "word": "GIẢI",
-          "start": 2.24,
-          "end": 2.52
+          "start": 4.5,
+          "end": 5.0
         },
         {
-          "word": "PHÁP",
-          "start": 2.52,
-          "end": 2.8
-        },
-        {
-          "word": "TỰ",
-          "start": 2.8,
-          "end": 3.08
-        },
-        {
-          "word": "ĐỘNG",
-          "start": 3.08,
-          "end": 3.36
-        },
-        {
-          "word": "HÓA",
-          "start": 3.36,
-          "end": 3.64
-        },
-        {
-          "word": "ĐỘT",
-          "start": 3.64,
-          "end": 3.92
-        },
-        {
-          "word": "PHÁ!",
-          "start": 3.92,
-          "end": 4.2
+          "word": "PHÁP!",
+          "start": 5.1,
+          "end": 5.7
         }
-      ],
-      "audioDucking": {
-        "musicVolumeNormal": 0.3,
-        "musicVolumeDucked": 0.1,
-        "duckDurationSec": 4.75
-      }
+      ]
     }
   ]
 }
