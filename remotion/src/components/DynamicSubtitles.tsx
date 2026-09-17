@@ -15,7 +15,14 @@ export const DynamicSubtitles: React.FC<DynamicSubtitlesProps> = ({
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const currentTime = frame / fps - sceneOffsetSec;
+  // NOTE: inside <Series.Sequence> useCurrentFrame() is sequence-local,
+  // so subtitles authored in scene-local seconds compare against local time.
+  // sceneOffsetSec is the cumulative global offset of this scene (passed by
+  // MainVideo.computeSceneOffsets) — kept for global-timeline mapping.
+  const localTime = frame / fps;
+  const currentTime = localTime;
+  const globalTime = localTime + sceneOffsetSec;
+  void globalTime;
 
   if (!subtitles || subtitles.length === 0) {
     return null;
@@ -39,7 +46,13 @@ export const DynamicSubtitles: React.FC<DynamicSubtitlesProps> = ({
       }}
     >
       {subtitles.map((sub, idx) => {
+        // Karaoke 3-state: past (spoken) / active (speaking) / future (upcoming)
+        const isPast = currentTime > sub.end;
         const isActive = currentTime >= sub.start && currentTime <= sub.end;
+        const isFuture = currentTime < sub.start;
+        void isFuture;
+        const color = isActive ? "#FACC15" : isPast ? "#FDE68A" : "#FFFFFF";
+        const opacity = isPast ? 0.85 : 1.0;
         return (
           <span
             key={idx}
@@ -47,7 +60,8 @@ export const DynamicSubtitles: React.FC<DynamicSubtitlesProps> = ({
               fontSize: isPortrait ? 52 : 38,
               fontWeight: 900,
               fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-              color: isActive ? "#FACC15" : "#FFFFFF",
+              color,
+              opacity,
               transform: isActive ? "scale(1.15)" : "scale(1.0)",
               transition: "transform 0.08s ease-in-out, color 0.08s ease-in-out",
               textShadow: "0 4px 16px rgba(0,0,0,0.85), 0 2px 4px rgba(0,0,0,0.9)",
