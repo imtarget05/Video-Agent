@@ -84,9 +84,33 @@ class HardToolGuard:
     Prevents infinite LLM retry loops and stops compute waste.
     """
     MAX_5XX_RETRIES = 2
+    BACKOFF_BASE_SEC = 1.0
+
+    @classmethod
+    def classify_error(cls, error_msg: str) -> str:
+        msg = (error_msg or "").upper()
+        if "POLICY_VIOLATION" in msg or "MODERATION" in msg or "CONTENT_POLICY" in msg:
+            return "MODERATION_BLOCKED"
+        if " 403" in msg or "403 " in msg or "HTTP 403" in msg or "FORBIDDEN" in msg or " 400" in msg or "HTTP 400" in msg or "BAD REQUEST" in msg:
+            # Policy/moderation style 4xx: treated as moderation block, 0 retry.
+            if "POLICY" in msg or "MODERATION" in msg or "BLOCK" in msg or "FORBIDDEN" in msg:
+                return "MODERATION_BLOCKED"
+            return "FATAL_4XX"
+        if "HTTP 5" in msg or " 500" in msg or " 502" in msg or " 503" in msg or " 504" in msg or "TIMEOUT" in msg or "CONNECTION" in msg or "OVERLOADED" in msg or "GATEWAY" in msg:
+            return "RETRYABLE_5XX"
+        return "FATAL_4XX"
+
+    @classmethod
+    def backoff_delay(cls, attempt: int, base_sec: float = None) -> float:
+        base = cls.BACKOFF_BASE_SEC if base_sec is None else base_sec
+        return round(base * (2 ** max(0, attempt - 1)), 3)
 
     @classmethod
     def execute_with_guardrails(cls, provider_func, *args, **kwargs) -> ToolExecutionResult:
+        import os
+        import time
+        backoff_base = float(os.getenv("GUARDRAIL_BACKOFF_BASE_SEC", str(cls.BACKOFF_BASE_SEC)))
+        disable_sleep = os.getenv("PYTEST_CURRENT_TEST") is not None or backoff_base <= 0
         attempt = 0
         while attempt <= cls.MAX_5XX_RETRIES:
             attempt += 1
@@ -101,11 +125,20 @@ class HardToolGuard:
                 )
             except Exception as exc:
                 error_msg = str(exc)
-                # Content moderation failure -> 0 retry
-                if "POLICY_VIOLATION" in error_msg or "MODERATION" in error_msg:
+                kind = cls.classify_error(error_msg)
+                # Content moderation / policy failure -> 0 retry
+                if kind == "MODERATION_BLOCKED":
                     return ToolExecutionResult(
                         success=False,
                         status="MODERATION_BLOCKED",
+                        error=error_msg,
+                        retry_allowed=False,
+                        attempts_made=attempt
+                    )
+                if kind == "FATAL_4XX":
+                    return ToolExecutionResult(
+                        success=False,
+                        status="FAILED",
                         error=error_msg,
                         retry_allowed=False,
                         attempts_made=attempt
@@ -119,6 +152,8 @@ class HardToolGuard:
                         retry_allowed=False,
                         attempts_made=attempt
                     )
+                if not disable_sleep:
+                    time.sleep(cls.backoff_delay(attempt, base_sec=backoff_base))
                 # Otherwise retry if attempts <= MAX_5XX_RETRIES
         return ToolExecutionResult(
             success=False,
