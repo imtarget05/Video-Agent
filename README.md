@@ -24,7 +24,7 @@ Unlike naive "prompt-and-pray" wrapper tools that treat AI models as a magic wan
 
 | # | Real-World Production Lesson | Naive "AI Washing" Approach | Video-Agent Engineering Architecture |
 |---|---|---|---|
-| **1** | **Model is just a swappable layer** | Prompts are the entire system; debate over which model is best | 3-Layer Architecture: (1) Storyboard planning via still keyframes, (2) Swappable video generator (Gemini Omni / Kling / Mock), (3) Remotion code assembly |
+| **1** | **Model is just a swappable layer** | Prompts are the entire system; debate over which model is best | 3-Layer Architecture: (1) Storyboard planning via still keyframes, (2) Swappable video generator (Hugging Face FLUX.1 / Kling / Mock), (3) Remotion code assembly |
 | **2** | **Cost per finished minute (CPFM)** | Only measures "cost per API call"; ignores silent retry burn | SQLite-backed `CostLedger` computing $\text{CPFM} = \frac{\text{Total Spend}}{\text{Finished Min}}$ and Gross-to-Net compute ratios |
 | **3** | **Editing is the real bottleneck (80% value)** | Assumes AI generates a ready-to-publish 60s video | **Remotion (React/TS)** timeline engine: micro-take cuts, kinetic typography, dynamic audio ducking (-18dB during voiceover), transitions |
 | **4** | **Hard tool guardrails > prompt pleading** | Tells LLM in prompt "please don't retry too many times" | Hard-coded tool limiter in Python: max 2 retries on 5xx, **0 retries** on policy violations; Preflight safety & budget checks |
@@ -46,7 +46,7 @@ flowchart TD
     end
 
     subgraph Layer2 ["2. Pluggable Generation & Hard Guardrails"]
-        HITL -->|Approved| ModelRouter["Video Model Router (Gemini Omni / Kling / Wan2.1 / Mock)"]
+        HITL -->|Approved| ModelRouter["Video Model Router (Hugging Face Qwen-72B / FLUX.1 / Remotion)"]
         ModelRouter --> ToolGuard["Hard-coded Tool Guard (Max 2 Retries 5xx, 0 Retry Policy Reject)"]
         ToolGuard --> CostTracker["Cost Accounting Engine (Đo Cost-Per-Finished-Minute)"]
         ToolGuard --> TTS["TTS Engine (Edge-TTS / ElevenLabs) + Whisper Timestamps"]
@@ -90,7 +90,7 @@ Video-Agent/
 │   │   ├── providers/
 │   │   │   ├── base.py         # Abstract Base Provider interface
 │   │   │   ├── mock_provider.py # Zero-cost deterministic offline provider
-│   │   │   └── gemini_video.py # Google Gemini Omni Flash Video adapter
+│   │   │   └── gemini_video.py # Google Hugging Face Serverless (Qwen-72B & FLUX.1) adapter
 │   │   └── api/
 │   │       └── server.py       # FastAPI REST API (Projects, HITL, Cost Audit)
 │   ├── tests/                  # Pytest unit & integration suite (16 tests)

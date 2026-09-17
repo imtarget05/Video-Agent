@@ -1,3 +1,4 @@
+from backend.app.providers.hf_llm import HuggingFaceScriptwriter
 """
 LangGraph execution nodes for Video-Agent.
 Encapsulates Director, Scriptwriter, Storyboarder, Preflight, Generation, Editorial Remotion, and QC.
@@ -28,32 +29,19 @@ def director_node(state: VideoProjectState) -> Dict[str, Any]:
 
 
 def scriptwriter_node(state: VideoProjectState) -> Dict[str, Any]:
-    """Scriptwriter Agent: Decomposes topic into micro-scenes with narration and action prompts."""
+    """Scriptwriter Agent: Uses Hugging Face Qwen-72B to autonomously generate scenes."""
     topic = state.topic
-    # Deterministic scene drafting (for 15-30s shorts: 3 distinct scenes)
-    scenes = [
-        Scene(
-            scene_id=1,
-            title="Hook",
-            visual_prompt=f"Cinematic close-up introducing {topic}, engaging lighting, dynamic camera angle",
-            voiceover_text=f"Bạn có biết điều này về {topic} không?",
-            duration_sec=4.0
-        ),
-        Scene(
-            scene_id=2,
-            title="Value Core",
-            visual_prompt=f"High-detail showcase demonstrating core insight of {topic}, clean depth of field",
-            voiceover_text=f"Đây là giải pháp công nghệ giúp tối ưu hóa toàn diện {topic}.",
-            duration_sec=6.0
-        ),
-        Scene(
-            scene_id=3,
-            title="Call To Action",
-            visual_prompt=f"Inspiring conclusion scene, confident smile, modern studio background",
-            voiceover_text="Theo dõi ngay để cập nhật thêm nhiều giải pháp tự động hóa đột phá!",
-            duration_sec=5.0
-        ),
-    ]
+    writer = HuggingFaceScriptwriter()
+    raw_scenes = writer.generate_script(topic)
+    scenes = []
+    for s in raw_scenes:
+        scenes.append(Scene(
+            scene_id=s["scene_id"],
+            title=s.get("title", f"Scene {s['scene_id']}"),
+            visual_prompt=s.get("visual_prompt", f"Cinematic 8k view of {topic}"),
+            voiceover_text=s.get("voiceover", ""),
+            duration_sec=float(s.get("duration_sec", 5.0))
+        ))
     return {
         "scenes": scenes,
         "status": PipelineStatus.SCRIPTED

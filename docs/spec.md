@@ -46,7 +46,7 @@ flowchart TD
     end
 
     subgraph Layer2 ["Tầng 2: Pluggable Generation & Hard Guardrails"]
-        HITL -->|Approved| ModelRouter["Video Model Router (Gemini Omni / Kling / Wan2.1 / Mock)"]
+        HITL -->|Approved| ModelRouter["Video Model Router (Hugging Face Qwen-72B / FLUX.1 / Remotion)"]
         ModelRouter --> ToolGuard["Hard-coded Tool Guard (Max 2 Retries 5xx, 0 Retry Policy Reject)"]
         ToolGuard --> CostTracker["Cost Accounting Engine (Đo Cost-Per-Finished-Minute)"]
         ToolGuard --> TTS["TTS Engine (Edge-TTS / ElevenLabs) + Whisper Timestamps"]
@@ -86,7 +86,7 @@ flowchart TD
   - `check_status(job_id: str) -> JobStatus`
 - **Supported Adapters**:
   - `MockVideoProvider`: Generates lightweight synthetic/color video clips with timestamp watermark for instant, free local testing and CI/CD.
-  - `GeminiOmniFlashProvider`: Calls Google GenAI SDK for Gemini Omni Flash Video generation/editing.
+  - `Hugging FaceOmniFlashProvider`: Calls Google GenAI SDK for Hugging Face Serverless (Qwen-72B & FLUX.1) generation/editing.
   - `KlingWanProvider`: Standard HTTP REST wrapper for Kling/Wan2.1 video generation APIs.
 - **TTS & Captions**:
   - `EdgeTTSProvider`: High-quality, free multilingual voiceover synthesis (Vietnamese, English, etc.).
