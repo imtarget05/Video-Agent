@@ -14,6 +14,7 @@ from backend.app.agent.nodes import (
     editorial_remotion_manifest_node,
     qc_audit_node,
 )
+from backend.app.agent.safety_reformulator import safety_reformulator_node
 
 
 def create_video_agent_graph():
@@ -29,6 +30,7 @@ def create_video_agent_graph():
     workflow.add_node("video_generation", video_generation_node)
     workflow.add_node("editorial_assembly", editorial_remotion_manifest_node)
     workflow.add_node("qc_audit", qc_audit_node)
+    workflow.add_node("safety_reformulator", safety_reformulator_node)
 
     # 2. Linear early-phase edges
     workflow.add_edge(START, "director")
@@ -36,8 +38,10 @@ def create_video_agent_graph():
     workflow.add_edge("scriptwriter", "storyboarder")
     workflow.add_edge("storyboarder", "preflight")
 
-    # 3. Conditional routing from Preflight
+    # 3. Conditional routing from Preflight (single-pass reformulator, then END)
     def route_after_preflight(state: VideoProjectState) -> str:
+        if state.status == PipelineStatus.MODERATION_BLOCKED and not state.reformulated:
+            return "safety_reformulator"
         if state.status in [PipelineStatus.PREFLIGHT_FAILED, PipelineStatus.MODERATION_BLOCKED]:
             return END
         return "hitl_checkpoint"
@@ -45,8 +49,9 @@ def create_video_agent_graph():
     workflow.add_conditional_edges(
         "preflight",
         route_after_preflight,
-        {"hitl_checkpoint": "hitl_checkpoint", END: END}
+        {"hitl_checkpoint": "hitl_checkpoint", "safety_reformulator": "safety_reformulator", END: END}
     )
+    workflow.add_edge("safety_reformulator", END)
 
     # 4. Conditional routing from HITL Gate
     def route_after_hitl(state: VideoProjectState) -> str:
@@ -60,8 +65,10 @@ def create_video_agent_graph():
         {"video_generation": "video_generation", END: END}
     )
 
-    # 5. Conditional routing from Video Generation
+    # 5. Conditional routing from Video Generation (single-pass reformulator, then END)
     def route_after_generation(state: VideoProjectState) -> str:
+        if state.status == PipelineStatus.MODERATION_BLOCKED and not state.reformulated:
+            return "safety_reformulator"
         if state.status in [PipelineStatus.GENERATION_FAILED, PipelineStatus.MODERATION_BLOCKED]:
             return END
         return "editorial_assembly"
@@ -69,7 +76,7 @@ def create_video_agent_graph():
     workflow.add_conditional_edges(
         "video_generation",
         route_after_generation,
-        {"editorial_assembly": "editorial_assembly", END: END}
+        {"editorial_assembly": "editorial_assembly", "safety_reformulator": "safety_reformulator", END: END}
     )
 
     # 6. Assembly -> QC -> End
