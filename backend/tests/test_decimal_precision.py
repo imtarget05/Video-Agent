@@ -5,6 +5,9 @@ These tests MUST FAIL on the current float implementation.
 """
 from decimal import Decimal, ROUND_HALF_UP
 
+import pytest
+from pydantic import ValidationError
+
 from backend.app.agent.state import CostRecord
 from backend.app.cost.ledger import CostLedger
 
@@ -57,3 +60,39 @@ def test_cpfm_quantize_half_up(tmp_path):
     )
     assert expected == Decimal("1.01")
     assert cpfm == Decimal("1.01"), f"expected Decimal 1.01, got {cpfm!r}"
+
+
+def test_money_coercion_float_str_int():
+    """WP1-T2: CostRecord.cost_usd coerces float/str/int -> Decimal quantized 4dp, dumps float."""
+    r_float = CostRecord(
+        job_id="j1", provider="MockVideo", duration_sec=5.0, cost_usd=0.5
+    )
+    assert isinstance(r_float.cost_usd, Decimal)
+    assert r_float.cost_usd == Decimal("0.5000")
+
+    r_str = CostRecord(
+        job_id="j2", provider="MockVideo", duration_sec=5.0, cost_usd="0.12345"
+    )
+    assert r_str.cost_usd == Decimal("0.1235")  # HALF_UP to 4dp
+
+    r_int = CostRecord(
+        job_id="j3", provider="MockVideo", duration_sec=5.0, cost_usd=1
+    )
+    assert r_int.cost_usd == Decimal("1.0000")
+
+    # PlainSerializer keeps float contract on dump.
+    dumped = r_float.model_dump()
+    assert isinstance(dumped["cost_usd"], float)
+    assert dumped["cost_usd"] == 0.5
+
+
+def test_money_reject_nan_inf_negative():
+    """WP1-T2: NaN/inf/negative cost_usd must raise ValidationError."""
+    for bad in (float("nan"), float("inf"), float("-inf"), -0.01, "-5", "nan", "Infinity"):
+        with pytest.raises(ValidationError):
+            CostRecord(
+                job_id="bad",
+                provider="MockVideo",
+                duration_sec=5.0,
+                cost_usd=bad,
+            )

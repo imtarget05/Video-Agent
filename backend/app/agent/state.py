@@ -2,8 +2,48 @@
 Pydantic schemas and typed state definitions for Video-Agent.
 """
 from enum import Enum
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
+from typing import List, Optional, Dict, Any, Union
+from typing_extensions import Annotated
+from pydantic import BaseModel, Field, BeforeValidator, PlainSerializer
+import math
+
+
+def _coerce_money(v: Any) -> Decimal:
+    if isinstance(v, Decimal):
+        d = v
+    elif isinstance(v, bool):
+        raise ValueError(f"invalid Money value: {v!r}")
+    elif isinstance(v, int):
+        d = Decimal(v)
+    elif isinstance(v, float):
+        if math.isnan(v) or math.isinf(v):
+            raise ValueError(f"invalid Money value: {v!r}")
+        d = Decimal(str(v))
+    elif isinstance(v, str):
+        s = v.strip()
+        if not s:
+            raise ValueError(f"invalid Money value: {v!r}")
+        try:
+            d = Decimal(s)
+        except InvalidOperation:
+            raise ValueError(f"invalid Money value: {v!r}")
+        if d.is_nan() or d.is_infinite():
+            raise ValueError(f"invalid Money value: {v!r}")
+    else:
+        raise ValueError(f"invalid Money value: {v!r}")
+    if d.is_nan() or d.is_infinite():
+        raise ValueError(f"invalid Money value: {v!r}")
+    if d < 0:
+        raise ValueError(f"Money must be non-negative: {v!r}")
+    return d.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+
+Money = Annotated[
+    Decimal,
+    BeforeValidator(_coerce_money),
+    PlainSerializer(lambda v: float(v), return_type=float),
+]
 
 
 class AspectRatio(str, Enum):
@@ -66,7 +106,7 @@ class CostRecord(BaseModel):
     job_id: str
     provider: str
     duration_sec: float
-    cost_usd: float
+    cost_usd: Money
     attempt_number: int = 1
     status: str = "SUCCESS"  # SUCCESS, FAILED, MODERATION_BLOCKED
     prompt_tokens: int = 0
