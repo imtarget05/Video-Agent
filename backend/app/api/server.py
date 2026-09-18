@@ -104,6 +104,46 @@ def health_check():
     return {"status": "healthy", "service": "video-agent", "version": "1.0.0"}
 
 
+def _check_config_valid() -> None:
+    """Non-mutating config probe: environment name must be known."""
+    env = os.getenv("APP_ENV", "development").strip().lower()
+    if env not in ("development", "staging", "production"):
+        raise RuntimeError(f"unknown APP_ENV: {env}")
+
+
+def _check_storage_configured() -> None:
+    """Non-mutating config probe: storage backend selection must be valid.
+    Opens no connections, creates no directories, writes nothing."""
+    backend = os.getenv("STORAGE_BACKEND", "local").strip().lower()
+    if backend not in ("local", "s3mock", "r2"):
+        raise RuntimeError(f"unsupported STORAGE_BACKEND: {backend}")
+    if backend == "r2" and not os.getenv("R2_ENDPOINT", "").strip():
+        raise RuntimeError("R2_ENDPOINT missing for STORAGE_BACKEND=r2")
+
+
+@app.get("/health/live", status_code=status.HTTP_200_OK)
+def health_live():
+    """Liveness: process can serve. No dependency checks."""
+    return {"status": "ok", "service": "video-agent", "version": "1.0.0"}
+
+
+@app.get("/health/ready")
+def health_ready():
+    """Readiness: config valid + storage backend configured. No writes."""
+    checks: Dict[str, str] = {"config": "ok"}
+    try:
+        _check_config_valid()
+    except Exception as exc:
+        checks["config"] = f"not-ready: {exc}"
+    try:
+        _check_storage_configured()
+        checks["storage"] = "ok"
+    except Exception as exc:
+        checks["storage"] = f"not-ready: {exc}"
+    ready = all(value == "ok" for value in checks.values())
+    return {"status": "ready" if ready else "not-ready", "checks": checks}
+
+
 # -------------------------------------------------------------
 # Standard Project Endpoints
 # -------------------------------------------------------------
