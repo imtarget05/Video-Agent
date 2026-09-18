@@ -46,7 +46,7 @@ flowchart TD
     end
 
     subgraph Layer2 ["2. Pluggable Generation & Hard Guardrails"]
-        HITL -->|Approved| ModelRouter["Video Model Router (Hugging Face Qwen-72B / FLUX.1 / Remotion)"]
+        HITL -->|Approved| ModelRouter["LLM ModelRouter (Ollama qwen2.5:3b local default / hf-cloud Qwen-72B optional / mock CI $0) + Video Router (FLUX cloud-only / Mock)"]
         ModelRouter --> ToolGuard["Hard-coded Tool Guard (Max 2 Retries 5xx, 0 Retry Policy Reject)"]
         ToolGuard --> CostTracker["Cost Accounting Engine (Đo Cost-Per-Finished-Minute)"]
         ToolGuard --> TTS["TTS Engine (Edge-TTS / ElevenLabs) + Whisper Timestamps"]
@@ -90,7 +90,8 @@ Video-Agent/
 │   │   ├── providers/
 │   │   │   ├── base.py         # Abstract Base Provider interface (generate_clip + check_status)
 │   │   │   ├── mock_provider.py # Zero-cost deterministic offline provider
-│   │   │   ├── hf_llm.py       # Hugging Face Qwen-72B scriptwriter adapter (offline fallback)
+│   │   │   ├── ollama_llm.py    # Default local scriptwriter (Ollama qwen2.5:3b ~2GB, M1 Pro 16GB, CI $0 fallback)
+│   │   │   │   │   ├── hf_llm.py       # Qwen-72B optional hf-cloud only + get_scriptwriter() ModelRouter (ollama/mock/hf-cloud)
 │   │   │   ├── hf_video.py     # Hugging Face open-weights video adapter (mock fallback)
 │   │   │   ├── kling_provider.py # Kling/Wan2.1 REST adapter (FutureAdapter, mock-mode offline)
 │   │   │   ├── edge_tts_provider.py # Edge-TTS voiceover adapter (offline mock fallback)
@@ -128,6 +129,12 @@ Video-Agent/
 ### 1. Prerequisites
 - Python 3.11+
 - Node.js 18+ and npm
+
+### 1b. LLM Config (M1 Pro 16GB personal, default $0 local)
+```bash
+# .env: LLM_PROVIDER=ollama, OLLAMA_MODEL=qwen2.5:3b (~2GB), OLLAMA_BASE_URL=http://localhost:11434
+ollama serve & ollama pull qwen2.5:3b  # local only; Qwen-72B via HF là hf-cloud optional; FLUX cloud-only
+```
 
 ### 2. ⚡ One-Command Studio Launch (Canvas UI + Remotion)
 ```bash
@@ -168,7 +175,7 @@ source .venv/bin/activate
 pip install -r backend/requirements.txt
 
 # Run full test suite (Offline, $0 cost)
-pytest -v --tb=short
+MOCK_VIDEO=true MOCK_TTS=true LLM_PROVIDER=mock pytest -v --tb=short
 ```
 
 ### 4. Remotion Video Composition Engine
@@ -192,6 +199,43 @@ npm run start
 - **Backend Pytest Suite**: `16 passed in 0.32s` (100% passing).
 - **Remotion Bundle Verification**: `100% Bundled code in 7181ms` without TypeScript or runtime errors.
 - **Cost Efficiency**: Pre-production keyframe filtering demonstrates a **60%+ reduction** in Cost Per Finished Minute compared to naive unanchored video generation.
+
+---
+
+## 🚀 DEPLOYMENT CHỐT — Cloud-First GPU (Serverless)
+
+> **Chốt kiến trúc:** Training = **Zero Training** (chỉ API test, xem `colab/hf_inference_demo.ipynb`).
+> Deployment duy nhất: **Cloud-First** — LangGraph orchestration + API chuyên dụng
+> (Kling / Wan2.1 / HF Inference / Fal.ai), serverless GPU burst **pay-per-second**
+> (VRAM **24–80GB** class: A10G/L4/A100/H100 theo provider).
+> **Local (Ollama `qwen2.5:3b`) chỉ viết kịch bản text — KHÔNG render video local.**
+> Test offline $0 qua `MockVideoProvider` / `MockTTSProvider` (`MOCK_VIDEO=true MOCK_TTS=true`,
+> `LLM_PROVIDER=mock`). Không reranker (video assembly pipeline).
+
+| Môi trường | Vai trò | Provider |
+|---|---|---|
+| Cloud (duy nhất để render) | Video render GPU burst | `VIDEO_PROVIDER=kling/hf/cloud` (Kling/Wan2.1/HF Inference/Fal.ai), `KlingWanProvider` mock-mode khi thiếu key |
+| Cloud (optional) | Scriptwriter 72B | `LLM_PROVIDER=hf-cloud` (`HuggingFaceScriptwriter`, Qwen2.5-72B-Instruct) |
+| Local | Viết kịch bản text only | `LLM_PROVIDER=ollama` (`qwen2.5:3b` ~2GB, M1 Pro 16GB) — không render |
+| CI/Offline | Test $0 | `LLM_PROVIDER=mock` + `MockVideo/MockTTS` (deterministic fallback) |
+
+Chi tiết: xem `docs/DEPLOYMENT_CLOUD_FIRST.md`.
+
+## 🛡️ API / Job / Delivery Safety (plan 2026-09-18)
+
+- **Auth bắt buộc**: mọi mutation cần `X-API-Key` (`API_KEY`); production
+  fail-closed khi thiếu key hoặc `CORS_ORIGINS` (không wildcard + credentials).
+- **Provider trung thực**: không còn `SUCCEEDED` mặc định. Mỗi provider submit
+  và giữ remote job id; mock clip luôn `mode=mock` + cost 0, không bao giờ bị
+  gắn nhãn cloud render.
+- **Job bền vững**: SQLite store (`backend/app/api/store.py`) giữ
+  projects/jobs/subscriptions/receipts qua restart; idempotency key tránh
+  double-bill.
+- **Render async**: `POST /api/v1/canvas/render` → `202 {job_id, PENDING}`;
+  worker chạy Remotion với timeout (`RENDER_TIMEOUT_SEC`) và manifest per-job.
+- **Webhook SSRF-safe**: reject loopback/RFC1918/link-local/DNS-private; HMAC
+  per-target (`WEBHOOK_SECRET`, không còn `dev-secret` ở production) với
+  idempotent delivery receipts.
 
 ---
 

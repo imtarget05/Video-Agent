@@ -16,7 +16,6 @@ class MockVideoProvider(BaseVideoProvider):
     def __init__(self, simulate_failure: Optional[str] = None):
         self.simulate_failure = simulate_failure
         self.call_count = 0
-
     @property
     def provider_name(self) -> str:
         return "MockVideo-Engine"
@@ -57,6 +56,18 @@ class MockVideoProvider(BaseVideoProvider):
                 "simulated": True
             }
         )
+
+    def submit_job(
+        self, prompt: str, duration_sec: float = 4.0, seed: int = 42,
+    ) -> dict:
+        """Deterministic zero-cost mock submission (never a cloud render)."""
+        return {
+            "provider_job_id": f"mock-{seed}-{int(duration_sec)}",
+            "mode": "mock",
+            "status": "PENDING",
+            "clip_url": f"/data/rendered/clip_{seed}_{int(duration_sec)}.mp4",
+            "cost_usd": 0.0,
+        }
 
     def check_status(self, job_id: str):
         from backend.app.agent.state import JobStatus

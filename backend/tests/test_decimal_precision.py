@@ -96,3 +96,51 @@ def test_money_reject_nan_inf_negative():
                 duration_sec=5.0,
                 cost_usd=bad,
             )
+
+
+def test_server_boundary_float_backcompat(tmp_path):
+    """WP1-T5: Decimal internals must keep the float contract for server.py.
+
+    Every value the API layer consumes (metrics dicts, state cost fields) must
+    still be convertible with plain float() without raising or losing shape.
+    """
+    ledger = CostLedger(db_path=str(tmp_path / "backcompat.db"))
+    project_id = "proj_backcompat"
+
+    for i in range(3):
+        ledger.record_cost(project_id, _make_record(f"job_{i}", Decimal("0.10")))
+
+    metrics = ledger.get_project_metrics(project_id=project_id, approved_final_seconds=15.0)
+
+    # server.py serializes these as JSON numbers (float contract).
+    assert isinstance(float(metrics["total_spend_usd"]), float)
+    assert float(metrics["total_spend_usd"]) == pytest.approx(0.30)
+    assert isinstance(float(metrics["cost_per_finished_minute"]), float)
+    assert float(metrics["cost_per_finished_minute"]) == pytest.approx(1.20)  # 0.30 / 0.25 min
+
+    # State fields stay float (VideoProjectState.actual_cost_usd: float).
+    from backend.app.agent.state import VideoProjectState
+
+    state = VideoProjectState(project_id=project_id, topic="t")
+    state.actual_cost_usd = float(metrics["total_spend_usd"])
+    assert isinstance(state.actual_cost_usd, float)
+
+    # Legacy REAL rows (pre-WP1 DBs) still read back exactly as Decimal.
+    import sqlite3
+
+    conn = sqlite3.connect(str(tmp_path / "legacy.db"))
+    conn.execute(
+        "CREATE TABLE cost_records (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id TEXT, job_id TEXT,"
+        " provider TEXT, duration_sec REAL, cost_usd REAL, attempt_number INTEGER, status TEXT,"
+        " prompt_tokens INTEGER DEFAULT 0)"
+    )
+    conn.execute(
+        "INSERT INTO cost_records (project_id, job_id, provider, duration_sec, cost_usd,"
+        " attempt_number, status) VALUES ('legacy', 'j1', 'MockVideo', 5.0, 0.1, 1, 'SUCCESS')"
+    )
+    conn.commit()
+    conn.close()
+
+    legacy = CostLedger(db_path=str(tmp_path / "legacy.db"))
+    legacy_metrics = legacy.get_project_metrics(project_id="legacy", approved_final_seconds=15.0)
+    assert legacy_metrics["total_spend_usd"] == Decimal("0.1000")

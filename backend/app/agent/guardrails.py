@@ -96,7 +96,9 @@ class HardToolGuard:
             if "POLICY" in msg or "MODERATION" in msg or "BLOCK" in msg or "FORBIDDEN" in msg:
                 return "MODERATION_BLOCKED"
             return "FATAL_4XX"
-        if "HTTP 5" in msg or " 500" in msg or " 502" in msg or " 503" in msg or " 504" in msg or "TIMEOUT" in msg or "CONNECTION" in msg or "OVERLOADED" in msg or "GATEWAY" in msg:
+        if "HTTP 5" in msg or " 500" in msg or " 502" in msg or " 503" in msg or " 504" in msg or "TIMEOUT" in msg or "TIMED OUT" in msg or "TIME OUT" in msg or "CONNECTION" in msg or "OVERLOADED" in msg or "GATEWAY" in msg:
+            return "RETRYABLE_5XX"
+        if " 429" in msg or "429 " in msg or "HTTP 429" in msg or "TOO MANY" in msg or "RATE LIMIT" in msg or "RATE_LIMIT" in msg or "RATELIMIT" in msg:
             return "RETRYABLE_5XX"
         return "FATAL_4XX"
 

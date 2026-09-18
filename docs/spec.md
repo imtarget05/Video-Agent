@@ -46,7 +46,7 @@ flowchart TD
     end
 
     subgraph Layer2 ["Tầng 2: Pluggable Generation & Hard Guardrails"]
-        HITL -->|Approved| ModelRouter["Video Model Router (Hugging Face Qwen-72B / FLUX.1 / Remotion)"]
+        HITL -->|Approved| ModelRouter["LLM ModelRouter (Ollama qwen2.5:3b local default / hf-cloud Qwen-72B optional / mock CI $0) + Video Router (FLUX cloud-only / Mock)"]
         ModelRouter --> ToolGuard["Hard-coded Tool Guard (Max 2 Retries 5xx, 0 Retry Policy Reject)"]
         ToolGuard --> CostTracker["Cost Accounting Engine (Đo Cost-Per-Finished-Minute)"]
         ToolGuard --> TTS["TTS Engine (Edge-TTS / ElevenLabs) + Whisper Timestamps"]
@@ -87,7 +87,9 @@ flowchart TD
 - **Supported Adapters**:
   - `MockVideoProvider`: Generates lightweight synthetic/color video clips with timestamp watermark for instant, free local testing and CI/CD.
   - `HuggingFaceVideoProvider` (`hf_video.py`): Open-weights video models (Wan2.1/CogVideoX-style) with deterministic mock fallback offline.
-  - `HuggingFaceScriptwriter` (`hf_llm.py`): Qwen-72B-class script planning adapter with offline fallback.
+  - `OllamaScriptwriter` (`ollama_llm.py`): default local LLM (M1 Pro 16GB personal, qwen2.5:3b ~2GB, temp 0.7 num_predict 800 JSON-only, `OLLAMA_BASE_URL` http://localhost:11434, timeout 120) với deterministic fallback offline.
+  - `HuggingFaceScriptwriter` (`hf_llm.py`): Qwen-72B-class script planning adapter — optional cloud-only (`LLM_PROVIDER=hf-cloud`), cấm model >4GB local. `get_scriptwriter()` ModelRouter: mock->None (deterministic fallback, CI $0), hf-cloud->HuggingFace, còn lại->Ollama.
+  - `SafetyReformulator`: local rewrite deterministic trước; chỉ gọi LLM rewrite khi writer khả dụng (không bắt buộc).
   - `OmniFlash` / `KlingWan` → `FutureAdapter`: Planned vendor adapters; in v1.0.0 they run as mock-backed `FutureAdapter` shims (`kling_provider.py` mock-mode) so CI stays offline at $0 cost. No live vendor calls in tests.
   - Delivery: HMAC-signed webhook fan-out via `delivery/dispatcher.py` (`DeliveryTarget`/`Receipt`, max 2 retries) reusing `api/webhooks.py` signatures.
 - **TTS & Captions**:
@@ -124,6 +126,22 @@ flowchart TD
    - `State Transition`: Diverts to `SafetyReformulatorNode` or pauses for human correction.
 
 ---
+
+## 4b. LLM-local Config (M1 Pro 16GB personal)
+- Default `LLM_PROVIDER=ollama` (`OLLAMA_MODEL=qwen2.5:3b` ~2GB, temp 0.7 num_predict 800 JSON-only, timeout 120, `OLLAMA_BASE_URL=http://localhost:11434`).
+- `MockVideo/MockTTS=true` cho CI $0; Qwen-72B via HF chỉ là `hf-cloud` optional; giữ FLUX cloud-only; cấm model >4GB local.
+
+## 4c. DEPLOYMENT CHỐT — Cloud-First GPU (Serverless)
+
+- **Training = Zero Training** (chỉ API test, xem `colab/hf_inference_demo.ipynb`).
+- **Deployment duy nhất: Cloud-First** — LangGraph orchestration + API chuyên dụng
+  (Kling / Wan2.1 / HF Inference / Fal.ai), serverless GPU burst pay-per-second,
+  VRAM **24–80GB** class (A10G/L4/A100/H100 theo provider).
+- **Local (Ollama `qwen2.5:3b`) chỉ viết kịch bản text — KHÔNG render video local.**
+- Test offline **$0** qua `MockVideoProvider` / `MockTTSProvider`
+  (`MOCK_VIDEO=true MOCK_TTS=true`, `LLM_PROVIDER=mock`).
+- Không reranker (video assembly pipeline).
+- Chi tiết: `docs/DEPLOYMENT_CLOUD_FIRST.md`.
 
 ## 5. Verification & Acceptance Criteria
 - **Unit & Integration Tests**:

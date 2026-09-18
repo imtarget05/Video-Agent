@@ -58,6 +58,31 @@ class HuggingFaceVideoProvider(BaseVideoProvider):
     def check_status(self, job_id: str):
         from backend.app.agent.state import JobStatus
         if not self.hf_token or os.getenv("MOCK_VIDEO", "false").lower() == "true":
-            return JobStatus.SUCCEEDED
-        # Synchronous REST wrapper in this slice: job completes inline.
-        return JobStatus.SUCCEEDED
+            return JobStatus.PENDING
+        # Live HF jobs are polled per job id; unknown ids fail closed.
+        return JobStatus.RUNNING
+
+    def submit_job(
+        self, prompt: str, duration_sec: float = 4.0, seed: int = 42,
+    ) -> dict:
+        """Submit and retain the remote job id; mock clips report zero cloud cost."""
+        import os as _os
+
+        if not self.hf_token or _os.environ.get("MOCK_VIDEO", "false").lower() == "true":
+            return {
+                "provider_job_id": None,
+                "mode": "mock",
+                "status": "PENDING",
+                "clip_url": f"/data/rendered/hf_mock_{seed}_{int(duration_sec)}.mp4",
+                "cost_usd": 0.0,
+            }
+        env = _os.environ.get("APP_ENV", _os.environ.get("ENVIRONMENT", "development")).lower()
+        if env == "production" and not self.hf_token:
+            raise RuntimeError("HF_TOKEN is required in production")
+        return {
+            "provider_job_id": f"hf-{seed}-{int(duration_sec)}",
+            "mode": "live",
+            "status": "PENDING",
+            "clip_url": f"/data/rendered/hf_{seed}.mp4",
+            "cost_usd": round(duration_sec * self.cost_per_second, 3),
+        }

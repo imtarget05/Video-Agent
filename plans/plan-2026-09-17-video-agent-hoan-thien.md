@@ -46,3 +46,18 @@ Chi tiết test-code + implementation-code + lệnh verify từng task 2–5 ph�
 Plan complete and saved to `plans/plan-2026-09-17-video-agent-hoan-thien.md`. Hai option khi duyệt xong:
 1. Subagent-Driven (recommended) — fresh subagent per task + review giữa tasks.
 2. Inline Execution — batch trong session với checkpoint.
+
+## §DEPLOYMENT CHỐT — Cloud-First GPU (Serverless, 2026-09-17)
+
+- Training = Zero Training (chỉ API test, `colab/hf_inference_demo.ipynb`).
+- Deployment duy nhất: Cloud-First — LangGraph orchestration + API chuyên dụng
+  (Kling/Wan2.1/HF Inference/Fal.ai), serverless GPU burst pay-per-second, VRAM 24–80GB.
+- Local (Ollama `qwen2.5:3b`) chỉ viết kịch bản text — KHÔNG render video local.
+- Mock provider (`MOCK_VIDEO/MOCK_TTS=true`, `LLM_PROVIDER=mock`) test $0 offline.
+- Không reranker (video assembly pipeline). Chi tiết: `docs/DEPLOYMENT_CLOUD_FIRST.md`.
+
+## §LLM-local (chốt 2026-09-17, M1 Pro 16GB personal, cấm model >4GB)
+- Default `LLM_PROVIDER=ollama` với `qwen2.5:3b` (~2GB, temp 0.7 num_predict 800 JSON-only, timeout 120, `OLLAMA_BASE_URL=http://localhost:11434`).
+- `MockVideo/MockTTS=true` cho CI $0; Qwen-72B via HF chỉ là `hf-cloud` optional (`get_scriptwriter()` ModelRouter: mock->None fallback, hf-cloud->HuggingFace, còn lại->Ollama); giữ FLUX cloud-only.
+- Files: tạo mới `backend/app/providers/ollama_llm.py` (OllamaScriptwriter + deterministic fallback); sửa `hf_llm.py` (`get_scriptwriter()` + comment optional cloud-only + try/except fallback); sửa `nodes.py` (scriptwriter_node dùng router, safety_reformulator local rewrite trước); sửa `.env.example`/`.env`/`docs/spec.md`/`README.md`.
+- Verify: `grep -rn LLM_PROVIDER`, `diff .env.example`, `MOCK_VIDEO=true MOCK_TTS=true LLM_PROVIDER=mock pytest -v --tb=short`.

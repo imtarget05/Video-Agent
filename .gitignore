@@ -48,6 +48,18 @@ data/temp/
 *.wav
 *.mp3
 
+# P1 artefact hygiene (runtime, never commit)
+*.pkl
+*.pkl.tmp-*
+*.db
+*.sqlite3
+*.tmp
+*.temp
+*.log
+tmp/
+temp/
+logs/
+
 # macOS
 .DS_Store
 

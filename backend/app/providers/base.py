@@ -43,10 +43,25 @@ class BaseVideoProvider(ABC):
     ) -> GeneratedClip:
         pass
 
+    def submit_job(
+        self,
+        prompt: str,
+        duration_sec: float = 4.0,
+        seed: int = 42,
+    ) -> Dict[str, Any]:
+        """Submit an async job; providers with live APIs must override this."""
+        raise NotImplementedError(
+            f"{self.provider_name} does not implement submit_job"
+        )
+
     def check_status(self, job_id: str):
-        """Poll async generation job. Default: synchronous providers report SUCCEEDED."""
+        """Poll async generation job. Unknown state defaults to PENDING.
+
+        Never default to SUCCEEDED: a provider that cannot prove completion
+        must not let the API report a finished render.
+        """
         from backend.app.agent.state import JobStatus
-        return JobStatus.SUCCEEDED
+        return JobStatus.PENDING
 
 
 class BaseTTSProvider(ABC):

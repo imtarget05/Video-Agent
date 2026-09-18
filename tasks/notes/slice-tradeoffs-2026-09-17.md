@@ -14,6 +14,8 @@ Nguồn skill: `Vide coding/superpowers/skills/writing-plans/SKILL.md` + `repo-h
 8. **OmniFlash/KlingWan trong spec:** đánh dấu FutureAdapter, không block slice này; adapter hiện tại: Mock + hf_video + image_providers.
 9. **API_KEY optional (open khi rỗng):** CI green, prod set secret. Rate-limit in-memory 60/min.
 10. **TikTok/YouTube upload:** webhook stub + header note manual upload, không SDK keys ở slice này.
+11. **LLM-local chốt (M1 Pro 16GB, cấm >4GB):** default LLM_PROVIDER=ollama (qwen2.5:3b ~2GB, temp 0.7/800 JSON-only, timeout 120); MockVideo/MockTTS=true CI $0; Qwen-72B hf-cloud optional; FLUX cloud-only; get_scriptwriter() mock->None/hf-cloud->HF/còn lại->Ollama.
+12. **DEPLOYMENT CHỐT Cloud-First GPU Serverless (2026-09-17):** Training = Zero Training (chỉ API test, `colab/hf_inference_demo.ipynb`); deployment duy nhất Cloud-First — LangGraph + API chuyên dụng (Kling/Wan2.1/HF Inference/Fal.ai), serverless GPU burst pay-per-second, VRAM 24–80GB; local (qwen2.5:3b) chỉ viết kịch bản text, KHÔNG render video local; Mock provider test $0 offline; không reranker. Chi tiết: `docs/DEPLOYMENT_CLOUD_FIRST.md`.
 
 ## Unknowns (non-blocking)
 

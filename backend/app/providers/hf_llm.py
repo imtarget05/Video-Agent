@@ -1,6 +1,9 @@
 """
-Hugging Face LLM Scriptwriter Provider.
+Hugging Face LLM Scriptwriter Provider — DEPLOYMENT CHỐT: Cloud-First GPU (Serverless).
 Uses Hugging Face Serverless Inference (Qwen/Qwen2.5-72B-Instruct) for autonomous narrative generation.
+Local Ollama (qwen2.5:3b) CHỈ viết kịch bản text — KHÔNG render video local.
+Video render DUY NHẤT trên cloud (Kling/Wan2.1/HF Inference/Fal.ai, VRAM 24-80GB);
+test offline $0 qua Mock provider (LLM_PROVIDER=mock).
 Zero Gemini dependencies.
 """
 import json
@@ -17,6 +20,8 @@ class HuggingFaceScriptwriter:
     def __init__(self, hf_token: Optional[str] = None):
         self.hf_token = hf_token or os.getenv("HF_TOKEN")
         self.client = InferenceClient(api_key=self.hf_token)
+        # Optional cloud-only: Qwen-72B via Hugging Face Serverless Inference.
+        # Personal M1 Pro 16GB: cấm model >4GB local — chỉ dùng khi LLM_PROVIDER=hf-cloud.
         self.model = os.getenv("HF_LLM_MODEL", "Qwen/Qwen2.5-72B-Instruct")
 
     def generate_script(self, topic: str) -> List[Dict[str, Any]]:
@@ -80,3 +85,25 @@ class HuggingFaceScriptwriter:
                     "duration_sec": 5.0
                 }
             ]
+
+
+def get_scriptwriter():
+    """ModelRouter cho LLM scriptwriter — DEPLOYMENT CHỐT Cloud-First (default LLM_PROVIDER=ollama).
+
+    - mock -> None (caller dùng deterministic fallback, CI $0 offline, Mock provider).
+    - hf-cloud -> HuggingFaceScriptwriter (Qwen-72B serverless cloud, VRAM 24-80GB class).
+    - còn lại (ollama/""/None) -> OllamaScriptwriter (qwen2.5:3b local, CHỈ viết kịch bản text).
+    Video render KHÔNG bao giờ chạy local — duy nhất cloud/Mock (xem get_video_provider).
+    Wrap try/except: import lỗi -> deterministic fallback object.
+    """
+    provider = (os.getenv("LLM_PROVIDER", "ollama") or "ollama").lower()
+    if provider == "mock":
+        return None
+    if provider in ("hf-cloud", "hf", "huggingface"):
+        return HuggingFaceScriptwriter()
+    try:
+        from backend.app.providers.ollama_llm import OllamaScriptwriter
+        return OllamaScriptwriter()
+    except Exception as err:
+        print(f"  ⚠️ get_scriptwriter fallback ({err}). Using deterministic fallback.")
+        return None

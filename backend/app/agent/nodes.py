@@ -1,9 +1,12 @@
-from backend.app.providers.hf_llm import HuggingFaceScriptwriter
+from backend.app.providers.hf_llm import get_scriptwriter
+# SafetyReformulator dùng local rewrite (deterministic, offline $0) khi có;
+# chỉ gọi LLM rewrite khi LLM_PROVIDER != mock và writer khả dụng.
 """
 LangGraph execution nodes for Video-Agent.
 Encapsulates Director, Scriptwriter, Storyboarder, Preflight, Generation, Editorial Remotion, and QC.
 """
 from typing import Dict, Any, List
+from decimal import Decimal, ROUND_HALF_UP
 from backend.app.agent.state import (
     VideoProjectState,
     PipelineStatus,
@@ -16,6 +19,7 @@ from backend.app.consistency.character_dna import CharacterDNAManager
 from backend.app.providers.base import BaseVideoProvider, BaseTTSProvider
 from backend.app.providers.mock_provider import MockVideoProvider, MockTTSProvider
 from backend.app.cost.ledger import CostLedger
+from backend.app.agent.context_trim import build_trimmed_context
 
 
 def director_node(state: VideoProjectState) -> Dict[str, Any]:
@@ -28,11 +32,34 @@ def director_node(state: VideoProjectState) -> Dict[str, Any]:
     }
 
 
+def _llm_context(state: VideoProjectState) -> str:
+    """WP2: bản trimmed context (scenes + cost_records) cho prompt LLM.
+
+    Chỉ dùng khi compose prompt; state gốc giữ nguyên (không ghi đè mất dữ liệu).
+    """
+    import json
+
+    ctx = build_trimmed_context(state.scenes, state.cost_records)
+    return json.dumps(ctx, ensure_ascii=False, default=str)
+
+
 def scriptwriter_node(state: VideoProjectState) -> Dict[str, Any]:
-    """Scriptwriter Agent: Uses Hugging Face Qwen-72B to autonomously generate scenes."""
+    """Scriptwriter Agent: ModelRouter Cloud-First (Ollama qwen2.5:3b local CHỈ viết kịch bản text, hf-cloud optional).
+    Video render KHÔNG chạy ở đây — duy nhất cloud/Mock tại video_generation_node."""
     topic = state.topic
-    writer = HuggingFaceScriptwriter()
-    raw_scenes = writer.generate_script(topic)
+    try:
+        writer = get_scriptwriter()
+        prompt_topic = topic
+        if writer is not None and (state.scenes or state.cost_records):
+            # WP2: regenerate case — chỉ đưa bản trimmed context vào prompt.
+            prompt_topic = f"{topic}\n\n[context: trimmed prior state]\n{_llm_context(state)}"
+        raw_scenes = writer.generate_script(prompt_topic) if writer is not None else None
+        if not raw_scenes:
+            raise ValueError("mock/empty writer -> deterministic fallback")
+    except Exception as err:
+        print(f"  ⚠️ scriptwriter fallback ({err}). Using deterministic fallback.")
+        from backend.app.providers.ollama_llm import deterministic_fallback
+        raw_scenes = deterministic_fallback(topic)
     scenes = []
     for s in raw_scenes:
         scenes.append(Scene(
@@ -111,7 +138,8 @@ def video_generation_node(
     tts_provider: BaseTTSProvider = None,
     cost_ledger: CostLedger = None
 ) -> Dict[str, Any]:
-    """Video Generation Layer: Executes generation with hard tool guardrails."""
+    """Video Generation Layer: Cloud-First — executes generation via cloud/Mock providers only.
+    Local KHÔNG render video (Ollama chỉ viết kịch bản text). Mock provider cho test $0 offline."""
     if video_provider is None:
         from backend.app.providers import get_video_provider
         video_provider = get_video_provider()
@@ -126,7 +154,9 @@ def video_generation_node(
         cost_ledger = CostLedger()
 
     cost_records = list(state.cost_records)
-    total_cost = state.actual_cost_usd
+    # WP1: accumulate cost in exact Decimal (no float drift), cast to float
+    # only at the state boundary (server.py contract).
+    total_cost = Decimal(str(state.actual_cost_usd))
     updated_scenes = []
 
     for scene in state.scenes:
@@ -162,7 +192,7 @@ def video_generation_node(
         )
         cost_records.append(rec)
         cost_ledger.record_cost(state.project_id, rec)
-        total_cost += clip_data.cost_usd
+        total_cost += Decimal(str(clip_data.cost_usd))
 
         scene_copy = scene.model_copy()
         scene_copy.video_clip_url = clip_data.clip_url
@@ -172,7 +202,7 @@ def video_generation_node(
     return {
         "scenes": updated_scenes,
         "cost_records": cost_records,
-        "actual_cost_usd": round(total_cost, 3),
+        "actual_cost_usd": float(total_cost.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)),
         "status": PipelineStatus.GENERATING
     }
 
@@ -252,12 +282,12 @@ def qc_audit_node(
         "total_duration_sec": round(total_duration, 2),
         "checks": checks,
         "metrics": {
-            "cost_per_finished_minute": metrics["cost_per_finished_minute"],
-            "total_spend_usd": metrics["total_spend_usd"],
+            "cost_per_finished_minute": float(metrics["cost_per_finished_minute"]),
+            "total_spend_usd": float(metrics["total_spend_usd"]),
         },
     }
     return {
-        "cost_per_finished_minute": metrics["cost_per_finished_minute"],
+        "cost_per_finished_minute": float(metrics["cost_per_finished_minute"]),
         "qc_passed": qc_passed,
         "qc_report": qc_report,
         "status": PipelineStatus.COMPLETED if qc_passed else PipelineStatus.FAILED,

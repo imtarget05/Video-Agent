@@ -4,8 +4,17 @@ Tracks 'cost per finished minute' (CPFM), retry ratios, and gross-to-net efficie
 """
 import sqlite3
 import os
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, Any, List, Optional
 from backend.app.agent.state import CostRecord
+
+
+def _to_decimal(value: Any) -> Decimal:
+    """Rebuild an exact Decimal from a ledger value (TEXT str(Decimal) or
+    legacy REAL float — Decimal(str(v)) avoids binary-float artifacts)."""
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value))
 
 
 def _resolve_db_path(explicit: Optional[str] = None) -> str:
@@ -42,7 +51,7 @@ class CostLedger:
                     job_id TEXT NOT NULL,
                     provider TEXT NOT NULL,
                     duration_sec REAL NOT NULL,
-                    cost_usd REAL NOT NULL,
+                    cost_usd TEXT NOT NULL,
                     attempt_number INTEGER NOT NULL,
                     status TEXT NOT NULL,
                     prompt_tokens INTEGER NOT NULL DEFAULT 0,
@@ -65,7 +74,7 @@ class CostLedger:
                 record.job_id,
                 record.provider,
                 record.duration_sec,
-                record.cost_usd,
+                str(record.cost_usd),
                 record.attempt_number,
                 record.status,
                 record.prompt_tokens or 0
@@ -78,7 +87,6 @@ class CostLedger:
                 SELECT 
                     COUNT(*) as total_calls,
                     SUM(duration_sec) as gross_generated_seconds,
-                    SUM(cost_usd) as total_spend_usd,
                     SUM(prompt_tokens) as total_prompt_tokens,
                     SUM(CASE WHEN attempt_number > 1 THEN 1 ELSE 0 END) as retries_count,
                     SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) as success_count
@@ -86,16 +94,34 @@ class CostLedger:
                 WHERE project_id = ?;
             """, (project_id,))
             row = cur.fetchone()
+            # Fetch individual cost values so summation happens in Python with
+            # exact Decimal arithmetic — SQL SUM() would coerce TEXT to float
+            # and reintroduce the drift WP1 exists to prevent.
+            cost_rows = conn.execute(
+                "SELECT cost_usd FROM cost_records WHERE project_id = ?;",
+                (project_id,)
+            ).fetchall()
 
         total_calls = row["total_calls"] or 0
         gross_seconds = row["gross_generated_seconds"] or 0.0
-        total_spend = row["total_spend_usd"] or 0.0
         total_prompt_tokens = row["total_prompt_tokens"] or 0
         retries = row["retries_count"] or 0
 
+        # Exact Decimal accumulation (no float drift: 0.1 x 3 == 0.30).
+        total_spend = sum(
+            (_to_decimal(r["cost_usd"]) for r in cost_rows),
+            Decimal("0")
+        ).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
         # Finished minutes of output
         final_minutes = (approved_final_seconds / 60.0) if approved_final_seconds > 0 else 0.0
-        cpfm = round(total_spend / final_minutes, 2) if final_minutes > 0 else 0.0
+        # CPFM: Decimal division + HALF_UP quantize to cents.
+        cpfm = (
+            (total_spend / Decimal(str(final_minutes))).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+            if final_minutes > 0 else Decimal("0.00")
+        )
 
         # Retry ratio
         retry_ratio = round(retries / total_calls, 3) if total_calls > 0 else 0.0
@@ -105,7 +131,7 @@ class CostLedger:
 
         return {
             "project_id": project_id,
-            "total_spend_usd": round(total_spend, 3),
+            "total_spend_usd": total_spend,
             "gross_generated_seconds": round(gross_seconds, 2),
             "approved_final_seconds": round(approved_final_seconds, 2),
             "cost_per_finished_minute": cpfm,

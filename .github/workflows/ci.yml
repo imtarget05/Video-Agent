@@ -29,8 +29,24 @@ jobs:
         env:
           MOCK_VIDEO: "true"
           MOCK_TTS: "true"
+          LLM_PROVIDER: mock
         run: |
           pytest -v --tb=short
+
+      # Plan 2026-09-18 safety gates: auth, provider truthfulness, render job
+      # persistence, webhook SSRF. These fail the build if any guard regresses.
+      - name: Safety gates (auth / provider truth / render queue / webhook SSRF)
+        env:
+          MOCK_VIDEO: "true"
+          MOCK_TTS: "true"
+          LLM_PROVIDER: mock
+        run: |
+          pytest -q backend/tests/test_api_auth.py \
+                     backend/tests/test_slice_a_backend.py \
+                     backend/tests/contract/test_provider_schema.py \
+                     backend/tests/test_render_jobs.py \
+                     backend/tests/test_webhook_security.py \
+                     backend/tests/test_slice_c_delivery.py
 
       - name: Run End-to-End Pipeline Demo
         env:
