@@ -15,7 +15,7 @@ from uuid import uuid4
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException, status, Header, Depends, Request
+from fastapi import FastAPI, HTTPException, status, Header, Depends, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -25,13 +25,25 @@ from backend.app.agent.state import VideoProjectState, AspectRatio, PipelineStat
 from backend.app.agent.graph import video_agent_graph
 from backend.app.consistency.character_dna import CharacterDNAManager
 from backend.app.cost.ledger import CostLedger
+from backend.app.storage.factory import get_storage
 from backend.app.providers.hf_llm import HuggingFaceScriptwriter
 from backend.app.providers.image_providers import get_default_image_provider
+from backend.app.config import cors_options, load_settings
 
 BASE_DIR = Path(__file__).parent.parent.parent.parent
 REMOTION_DIR = BASE_DIR / "remotion"
 PUBLIC_DIR = REMOTION_DIR / "public"
-OUT_DIR = BASE_DIR / "out"
+OUT_DIR = Path(os.getenv("OUT_DIR", str(BASE_DIR / "out")))
+
+
+def _out_dir() -> Path:
+    """WP4: OUT_DIR cấu hình được qua env (default BASE_DIR/out)."""
+    return Path(os.getenv("OUT_DIR", str(BASE_DIR / "out")))
+
+
+def _write_artifact(key: str, data: bytes) -> None:
+    """WP4: mọi artifact persist qua storage interface (local/s3mock/r2)."""
+    get_storage().save(key, data)
 DASHBOARD_DIR = BASE_DIR / "dashboard"
 
 PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
@@ -44,23 +56,24 @@ app = FastAPI(
     description="Autonomous AI Video Production & Semantic Workflow Canvas"
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(CORSMiddleware, **cors_options(load_settings()))
 
 # Mount static asset folders
 app.mount("/out", StaticFiles(directory=str(OUT_DIR)), name="out")
 app.mount("/public-assets", StaticFiles(directory=str(PUBLIC_DIR)), name="public-assets")
 
-# In-memory session store & cost ledger
+# Durable SQLite store (replaces process-local dicts); cost ledger
+def _durable_store():
+    from backend.app.api.store import get_store
+    return get_store()
+
+
 PROJECTS_STORE: Dict[str, VideoProjectState] = {}
 cost_ledger = CostLedger()
 
 # Slice C stores: async jobs + webhook subscriptions + rate-limit buckets
+# NOTE: JOBS_STORE / WEBHOOK_SUBSCRIPTIONS dicts are legacy mirrors only;
+# the SQLite store (get_store()) is the source of truth.
 JOBS_STORE: Dict[str, Dict[str, Any]] = {}
 WEBHOOK_SUBSCRIPTIONS: List[Dict[str, Any]] = []
 _RATE_BUCKETS: Dict[str, List[float]] = {}
@@ -68,7 +81,7 @@ RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
 
 
 def require_api_key(x_api_key: Optional[str] = Header(default=None)):
-    """Optional API-key auth: enforced only when API_KEY env is set (offline tests stay open)."""
+    """Require the configured API key whenever API_KEY is configured."""
     expected = os.getenv("API_KEY", "")
     if not expected:
         return True
@@ -162,7 +175,7 @@ class ApproveProjectRequest(BaseModel):
 
 
 @app.post("/api/v1/projects", status_code=status.HTTP_201_CREATED)
-def create_project(req: CreateProjectRequest):
+def create_project(req: CreateProjectRequest, _auth: bool = Depends(require_api_key)):
     project_id = f"proj_{uuid4().hex[:8]}"
 
     char_dna = None
@@ -197,7 +210,7 @@ def create_project(req: CreateProjectRequest):
 
 
 @app.post("/api/v1/projects/{project_id}/approve", status_code=status.HTTP_200_OK)
-def approve_project(project_id: str, req: ApproveProjectRequest):
+def approve_project(project_id: str, req: ApproveProjectRequest, _auth: bool = Depends(require_api_key)):
     if project_id not in PROJECTS_STORE:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -253,23 +266,8 @@ def get_cost_audit(project_id: str):
     return cost_ledger.get_project_metrics(project_id, total_duration)
 
 
-@app.get("/api/v1/jobs/{job_id}", status_code=status.HTTP_200_OK)
-def get_job_status(job_id: str, provider: str = "mock"):
-    """Poll async generation job status (Slice A: mock/hf/kling backed)."""
-    from backend.app.providers.mock_provider import MockVideoProvider
-    from backend.app.providers.hf_video import HuggingFaceVideoProvider
-    providers = {
-        "mock": MockVideoProvider(),
-        "hf": HuggingFaceVideoProvider(),
-    }
-    try:
-        from backend.app.providers.kling_provider import KlingWanProvider
-        providers["kling"] = KlingWanProvider()
-    except Exception:
-        pass
-    prov = providers.get(provider, providers["mock"])
-    job_status = prov.check_status(job_id)
-    return {"job_id": job_id, "provider": provider, "status": str(job_status.value if hasattr(job_status, "value") else job_status)}
+# NOTE: GET /api/v1/jobs/{job_id} is defined once below (durable-store backed);
+# the legacy provider-blind poller was merged into it.
 
 
 @app.get("/api/v1/projects/{project_id}/status", status_code=status.HTTP_200_OK)
@@ -287,7 +285,7 @@ class RejectProjectRequest(BaseModel):
 
 
 @app.post("/api/v1/projects/{project_id}/reject", status_code=status.HTTP_200_OK)
-def reject_project(project_id: str, req: RejectProjectRequest):
+def reject_project(project_id: str, req: RejectProjectRequest, _auth: bool = Depends(require_api_key)):
     """Explicit supervisor rejection (Slice C)."""
     if project_id not in PROJECTS_STORE:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -302,24 +300,75 @@ class CreateJobRequest(BaseModel):
     prompt: str = "a calm lake"
     duration_sec: float = 4.0
     provider: str = "mock"
+    idempotency_key: Optional[str] = None
 
 
 @app.post("/api/v1/jobs", status_code=status.HTTP_202_ACCEPTED)
 def create_job(req: CreateJobRequest, request: Request,
-               _rl: bool = Depends(check_rate_limit)):
-    """Create an async generation job; poll via GET /api/v1/jobs/{job_id} (Slice C)."""
+               _auth: bool = Depends(require_api_key), _rl: bool = Depends(check_rate_limit)):
+    """Create a durable generation job; poll via GET /api/v1/jobs/{job_id}.
+
+    A provider-specific remote job id is submitted and retained; mock clips
+    report mode=mock with zero cloud cost. Duplicate idempotency keys return
+    the existing job instead of billing twice.
+    """
+    import os as _os
+
+    from backend.app.providers.mock_provider import MockVideoProvider
+    from backend.app.providers.hf_video import HuggingFaceVideoProvider
+
+    env = _os.environ.get("APP_ENV", _os.environ.get("ENVIRONMENT", "development")).lower()
+    name = (req.provider or "mock").lower()
+    if name == "mock":
+        provider, mode = MockVideoProvider(), "mock"
+    elif name in ("hf", "huggingface"):
+        provider, mode = HuggingFaceVideoProvider(), (
+            "mock" if not HuggingFaceVideoProvider().hf_token
+            or _os.environ.get("MOCK_VIDEO", "false").lower() == "true" else "live")
+    elif name == "kling":
+        from backend.app.providers.kling_provider import KlingWanProvider
+        kling = KlingWanProvider()
+        if env == "production" and not kling.api_key:
+            raise HTTPException(status_code=503, detail="KLING_API_KEY is required in production")
+        provider, mode = kling, ("mock" if kling._mock_mode() else "live")
+    elif name == "private_gpu":
+        from backend.app.providers.private_gpu import PrivateGPUProvider
+        gpu = PrivateGPUProvider()
+        provider, mode = gpu, ("mock" if not gpu.is_configured
+                               or _os.environ.get("MOCK_VIDEO", "false").lower() == "true" else "live")
+    else:
+        raise HTTPException(status_code=400, detail=f"unknown provider: {req.provider}")
+    submit = getattr(provider, "submit_job", None)
+    if submit is None:
+        raise HTTPException(status_code=500, detail="provider cannot submit jobs")
+    try:
+        submitted = submit(prompt=req.prompt, duration_sec=req.duration_sec)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
     job_id = f"job_{uuid4().hex[:8]}"
-    JOBS_STORE[job_id] = {"job_id": job_id, "prompt": req.prompt,
-                          "duration_sec": req.duration_sec, "provider": req.provider,
-                          "status": "PENDING"}
-    return {"job_id": job_id, "provider": req.provider, "status": "PENDING"}
+    record = _durable_store().create_job({
+        "job_id": job_id,
+        "prompt": req.prompt,
+        "duration_sec": req.duration_sec,
+        "provider": name,
+        "provider_job_id": submitted.get("provider_job_id"),
+        "mode": submitted.get("mode", mode),
+        "status": "PENDING",
+        "idempotency_key": req.idempotency_key,
+        "cost_usd": submitted.get("cost_usd", 0.0),
+    })
+    JOBS_STORE[job_id] = {"job_id": job_id, "status": record.get("status", "PENDING")}
+    return {"job_id": job_id, "provider": name, "status": "PENDING",
+            "mode": record.get("mode", mode), "cost_usd": record.get("cost_usd", 0.0)}
 
 
 @app.get("/api/v1/jobs/{job_id}", status_code=status.HTTP_200_OK)
 def get_async_job(job_id: str, provider: str = "mock"):
-    """Poll an async job created via POST /api/v1/jobs (falls back to provider check_status)."""
-    stored = JOBS_STORE.get(job_id)
-    prov_name = stored["provider"] if stored else provider
+    """Poll a durable job; report the provider's real pending/terminal state."""
+    stored = _durable_store().get_job(job_id) or JOBS_STORE.get(job_id)
+    if stored is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    prov_name = stored.get("provider") or provider
     from backend.app.providers.mock_provider import MockVideoProvider
     from backend.app.providers.hf_video import HuggingFaceVideoProvider
     providers = {"mock": MockVideoProvider(), "hf": HuggingFaceVideoProvider()}
@@ -328,13 +377,22 @@ def get_async_job(job_id: str, provider: str = "mock"):
         providers["kling"] = KlingWanProvider()
     except Exception:
         pass
+    try:
+        from backend.app.providers.private_gpu import PrivateGPUProvider
+        providers["private_gpu"] = PrivateGPUProvider()
+    except Exception:
+        pass
     prov = providers.get(prov_name, providers["mock"])
-    job_status = prov.check_status(job_id)
+    remote_id = stored.get("provider_job_id") or job_id
+    job_status = prov.check_status(remote_id)
     live = str(job_status.value if hasattr(job_status, "value") else job_status)
-    if stored:
-        stored["status"] = live
-        return {"job_id": job_id, "provider": prov_name, "status": live}
-    return {"job_id": job_id, "provider": prov_name, "status": live}
+    _durable_store().update_job(job_id, status=live)
+    out = {"job_id": job_id, "provider": prov_name, "status": live,
+           "mode": stored.get("mode", "mock"),
+           "error": stored.get("error"),
+           "artifact_key": stored.get("artifact_key"),
+           "cost_usd": stored.get("cost_usd", 0.0)}
+    return out
 
 
 class SubscribeRequest(BaseModel):
@@ -345,16 +403,28 @@ class SubscribeRequest(BaseModel):
 @app.post("/api/v1/webhooks/subscribe", status_code=status.HTTP_201_CREATED)
 def subscribe_webhook(req: SubscribeRequest, _auth: bool = Depends(require_api_key),
                       _rl: bool = Depends(check_rate_limit)):
-    """Subscribe a URL to project event webhooks (Slice C)."""
-    entry = {"url": req.url, "events": req.events or ["project.completed"]}
-    if entry not in WEBHOOK_SUBSCRIPTIONS:
-        WEBHOOK_SUBSCRIPTIONS.append(entry)
-    return {"subscribed": True, "subscription": entry}
+    """Subscribe an SSRF-safe URL to project event webhooks (durable)."""
+    from backend.app.api.webhooks import WebhookSecurityError, validate_webhook_url
+
+    try:
+        validate_webhook_url(req.url)
+    except WebhookSecurityError as exc:
+        raise HTTPException(status_code=400, detail=f"WEBHOOK_TARGET_REJECTED: {exc}")
+    import os as _os
+
+    env = _os.environ.get("APP_ENV", _os.environ.get("ENVIRONMENT", "development")).lower()
+    if env in ("production", "prod", "staging") and not _os.environ.get("WEBHOOK_SECRET", "").strip():
+        raise HTTPException(status_code=503, detail="WEBHOOK_SECRET is required in production")
+    events = req.events or ["project.completed"]
+    record = _durable_store().save_subscription(req.url, "configured", events)
+    WEBHOOK_SUBSCRIPTIONS.clear()
+    WEBHOOK_SUBSCRIPTIONS.extend(_durable_store().list_subscriptions())
+    return {"subscribed": True, "subscription": record}
 
 
 @app.get("/api/v1/webhooks/subscriptions", status_code=status.HTTP_200_OK)
 def list_subscriptions():
-    return WEBHOOK_SUBSCRIPTIONS
+    return _durable_store().list_subscriptions()
 
 
 class DeliverRequest(BaseModel):
@@ -366,15 +436,17 @@ class DeliverRequest(BaseModel):
 @app.post("/api/v1/deliver", status_code=status.HTTP_200_OK)
 def deliver_project(req: DeliverRequest, _auth: bool = Depends(require_api_key),
                     _rl: bool = Depends(check_rate_limit)):
-    """Fan-out signed delivery receipts to target URLs via dispatcher (Slice C)."""
-    from backend.app.delivery.dispatcher import DeliveryTarget, deliver_all
+    """Fan-out signed, idempotent delivery receipts (never blocks on render)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from backend.app.delivery.dispatcher import DeliveryTarget, deliver_idempotent
     payload = json.dumps({"project_id": req.project_id, "event": req.event}).encode()
-    targets = [DeliveryTarget(url=u) for u in req.targets]
-    receipts = deliver_all(targets, payload, timeout_sec=2.0)
-    # Also notify stored subscribers when no explicit targets given.
-    if not targets and WEBHOOK_SUBSCRIPTIONS:
-        subs = [DeliveryTarget(url=s["url"]) for s in WEBHOOK_SUBSCRIPTIONS]
-        receipts = deliver_all(subs, payload, timeout_sec=2.0)
+    urls = list(req.targets) or [s["url"] for s in _durable_store().list_subscriptions()]
+    targets = [DeliveryTarget(url=u) for u in urls]
+    with ThreadPoolExecutor(max_workers=min(8, max(1, len(targets) or 1))) as pool:
+        receipts = list(pool.map(
+            lambda t: deliver_idempotent(t, payload, event=req.event, timeout_sec=2.0),
+            targets))
     return {"project_id": req.project_id, "event": req.event,
             "receipts": [r.model_dump() for r in receipts]}
 
@@ -412,7 +484,7 @@ class CanvasRenderRequest(BaseModel):
 
 
 @app.post("/api/v1/canvas/decompose")
-def canvas_decompose(req: CanvasDecomposeRequest):
+def canvas_decompose(req: CanvasDecomposeRequest, _auth: bool = Depends(require_api_key)):
     """Uses Hugging Face Qwen-72B to build the complete semantic workflow canvas."""
     writer = HuggingFaceScriptwriter()
     raw_scenes = writer.generate_script(req.topic)
@@ -452,7 +524,7 @@ def canvas_decompose(req: CanvasDecomposeRequest):
 
 
 @app.post("/api/v1/canvas/generate_audio")
-async def canvas_generate_audio(req: CanvasGenerateAudioRequest):
+async def canvas_generate_audio(req: CanvasGenerateAudioRequest, _auth: bool = Depends(require_api_key)):
     """Generates Edge-TTS speech and measures actual duration."""
     import edge_tts
     audio_filename = f"speech_scene_{req.scene_id}.mp3"
@@ -481,7 +553,7 @@ async def canvas_generate_audio(req: CanvasGenerateAudioRequest):
 
 
 @app.post("/api/v1/canvas/generate_image")
-def canvas_generate_image(req: CanvasGenerateImageRequest):
+def canvas_generate_image(req: CanvasGenerateImageRequest, _auth: bool = Depends(require_api_key)):
     """Generates an image matching the scene prompt via Hugging Face provider."""
     image_filename = f"scene_{req.scene_id}.jpg"
     image_path = PUBLIC_DIR / "images" / image_filename
@@ -505,12 +577,18 @@ def canvas_generate_image(req: CanvasGenerateImageRequest):
     }
 
 
-@app.post("/api/v1/canvas/render")
-def canvas_render(req: CanvasRenderRequest):
-    """Takes complete Canvas manifest and renders MP4 via Remotion CLI."""
-    manifest = req.model_dump()
+class CanvasRenderRequest(BaseModel):
+    projectId: str = "canvas_project"
+    aspectRatio: str = "9:16"
+    totalDurationSec: float = 17.8
+    bgMusicUrl: str = "audio/bg_music.wav"
+    scenes: List[Dict[str, Any]]
+    idempotency_key: Optional[str] = None
 
-    # Ensure each scene has word-level subtitles for dynamic kinetic typography
+
+def _prepare_canvas_manifest(req: "CanvasRenderRequest") -> Dict[str, Any]:
+    """Normalize a canvas manifest (subtitles etc.) without touching disk."""
+    manifest = req.model_dump()
     total_dur = 0.0
     for s in manifest.get("scenes", []):
         dur = float(s.get("durationSec", 5.0))
@@ -528,32 +606,79 @@ def canvas_render(req: CanvasRenderRequest):
                     for i, w in enumerate(words)
                 ]
     manifest["totalDurationSec"] = round(total_dur, 2)
+    return manifest
 
-    manifest_file = REMOTION_DIR / "render_manifest.json"
-    with open(manifest_file, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2, ensure_ascii=False)
 
-    composition_name = "Shorts916" if req.aspectRatio == "9:16" else "Landscape169"
-    safe_id = re.sub(r'[^a-zA-Z0-9]', '_', req.projectId).lower()
-    output_filename = f"{safe_id}_{req.aspectRatio.replace(':', '_')}.mp4"
-    output_path = OUT_DIR / output_filename
+@app.post("/api/v1/canvas/render", status_code=status.HTTP_202_ACCEPTED, response_model=None)
+def canvas_render(req: CanvasRenderRequest, _auth: bool = Depends(require_api_key),
+                  background: BackgroundTasks = None):
+    """Enqueue a durable render job; never run Remotion in the request path.
 
-    cmd = [
-        "npx", "remotion", "render",
-        "src/index.ts",
-        composition_name,
-        str(output_path),
-        "--props=./render_manifest.json"
-    ]
+    Returns 202 {job_id, status:"PENDING"}; the worker executes the render
+    subprocess with a per-job manifest/output (never the shared
+    render_manifest.json). A duplicate idempotency key returns the existing job.
+    """
+    manifest = _prepare_canvas_manifest(req)
+    manifest_bytes = json.dumps(manifest, indent=2, ensure_ascii=False).encode("utf-8")
+    _write_artifact(f"manifests/render_manifest_{req.projectId}.json", manifest_bytes)
 
-    res = subprocess.run(cmd, cwd=str(REMOTION_DIR), capture_output=True, text=True)
-    if res.returncode != 0:
-        raise HTTPException(status_code=500, detail=f"Remotion Render Failed: {res.stderr}")
+    if os.environ.get("EVENTING_ENABLED") == "1":
+        try:
+            from backend.app.messaging import outbox as ox, envelope as env
+            job_id = f"render_{uuid4().hex[:8]}"
+            idem_key = req.idempotency_key or f"render:{job_id}"
+            envelope = env.build_envelope(
+                event_type="video.render.requested",
+                producer="video/api",
+                app="video",
+                env=os.getenv("APP_ENV", "local"),
+                correlation_id=f"tr-{job_id}",
+                idempotency_key=idem_key,
+                payload={
+                    "job_id": job_id,
+                    "project_id": req.projectId,
+                    "aspect_ratio": req.aspectRatio,
+                    "total_duration_sec": req.totalDurationSec,
+                },
+                payload_ref=None,
+                schema_ref="video.render.commands.v1-value:1",
+            )
+            res = ox.enqueue_render_requested(
+                job={
+                    "job_id": job_id,
+                    "project_id": req.projectId,
+                    "aspect_ratio": req.aspectRatio,
+                    "total_duration_sec": req.totalDurationSec,
+                    "idempotency_key": idem_key,
+                    "provider": "remotion",
+                    "manifest_r2_key": f"manifests/render_manifest_{req.projectId}.json",
+                },
+                envelope=envelope,
+            )
+            return {"job_id": res["job_id"], "status": "PENDING"}
+        except Exception:
+            pass  # Fallback to local durable store if eventing DB blips
 
-    return {
-        "status": "COMPLETED",
-        "videoUrl": f"/out/{output_filename}",
-        "localPath": str(output_path.resolve()),
-        "durationSec": req.totalDurationSec,
-        "aspectRatio": req.aspectRatio
-    }
+    record = _durable_store().create_job({
+        "job_id": f"render_{uuid4().hex[:8]}",
+        "prompt": f"canvas:{req.projectId}",
+        "duration_sec": req.totalDurationSec,
+        "provider": "remotion",
+        "mode": "render",
+        "status": "PENDING",
+        "idempotency_key": req.idempotency_key,
+        "cost_usd": 0.0,
+    })
+    job_id = record["job_id"]
+
+    def _run() -> None:
+        from backend.app.jobs.render_worker import run_render_job
+
+        try:
+            run_render_job(job_id, manifest)
+        except Exception as exc:  # never crash the API worker thread
+            _durable_store().update_job(job_id, status="FAILED", error=str(exc))
+
+    if background is not None:
+        background.add_task(_run)
+    return {"job_id": job_id, "status": "PENDING"}
