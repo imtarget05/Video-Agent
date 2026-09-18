@@ -1,0 +1,39 @@
+# Video-Agent — deploy on Render (free tier, Docker runtime, demo bridge only)
+# Dashboard: https://dashboard.render.com → New → Web Service → connect this repo.
+# Runtime     : docker (./Dockerfile, context repo root)
+# Health check: /health/live (readiness at /health/ready)
+# Env vars    : secrets marked sync:false — fill in the Render dashboard,
+#               never commit real values. See .env.example for the full list.
+# After deploy, verify: GET <url>/health/live, GET <url>/health/ready
+# Rollback: redeploy the previous commit in the Render dashboard.
+services:
+  - type: web
+    name: video-agent-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health/live
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: staging
+      - key: STORAGE_BACKEND
+        value: local
+      - key: MOCK_VIDEO
+        value: "true"
+      - key: MOCK_TTS
+        value: "true"
+      # Secrets below are sync:false → set real values in Render dashboard.
+      - key: API_KEY
+        sync: false
+      - key: HF_TOKEN
+        sync: false
+      - key: FAL_KEY
+        sync: false
+      - key: REPLICATE_API_TOKEN
+        sync: false
+      - key: R2_ENDPOINT
+        sync: false
+      - key: DATABASE_URL
+        sync: false
