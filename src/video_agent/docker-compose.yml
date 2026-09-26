@@ -2,7 +2,11 @@ version: "3.8"
 
 services:
   video-agent:
-    build: .
+    build:
+      # Context is src/ so the image can lay the package out as /app/video_agent;
+      # the Dockerfile path is relative to the context, not to this file.
+      context: ..
+      dockerfile: video_agent/Dockerfile
     environment:
       - ENVIRONMENT=development
     ports:

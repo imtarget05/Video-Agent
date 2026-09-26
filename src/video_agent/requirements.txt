@@ -1,0 +1,5 @@
+# Dependencies of the src/video_agent scaffold app (main.py needs FastAPI, and
+# `python -m video_agent` starts it with uvicorn). Pinned to the same floors as
+# backend/requirements.txt so the two images agree.
+fastapi>=0.110.0
+uvicorn>=0.28.0
