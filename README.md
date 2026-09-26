@@ -203,7 +203,7 @@ cd remotion
 npm run placeholder-audio
 
 # Render Shorts916 (534 frames @ 30fps) to an MP4
-npm run build          # -> remotion/out/shorts.mp4
+npm run build          # -> out/shorts.mp4 (repo root; served by the API at /out/shorts.mp4)
 ```
 
 > **The audio in the default compositions is a placeholder, not media.**
@@ -236,7 +236,7 @@ hardware.
 - **Remotion Bundle** (`npx remotion bundle src/index.ts`): exit 0 in **5.4 s**, no
   TypeScript or runtime errors.
 - **Video render** (`npm run build`, composition `Shorts916`): exit 0 in **49.9 s**,
-  534/534 frames encoded, `remotion/out/shorts.mp4` = **~18.3 MB** (the exact
+  534/534 frames encoded, `out/shorts.mp4` = **~18.3 MB** (the exact
   byte count drifts by a few hundred between runs, which is normal for the h264
   encoder).
   CI runs this render on every push, so a render that cannot complete now fails

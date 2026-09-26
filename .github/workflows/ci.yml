@@ -97,11 +97,15 @@ jobs:
         working-directory: remotion
         run: npm run build
 
+      # The render writes to the repo-root out/ directory, which is the single
+      # canonical output location: it is what server.py mounts at /out, and what
+      # render_worker and scripts/generate_video.py already wrote to. The step
+      # runs in remotion/, so the path is ../out/shorts.mp4.
       - name: Assert rendered MP4 exists and is non-trivial
         working-directory: remotion
         run: |
-          test -f out/shorts.mp4
-          size=$(stat -c%s out/shorts.mp4)
+          test -f ../out/shorts.mp4
+          size=$(stat -c%s ../out/shorts.mp4)
           echo "rendered out/shorts.mp4 = ${size} bytes"
           if [ "$size" -lt 100000 ]; then
             echo "::error::rendered MP4 is only ${size} bytes - render did not produce real output"
