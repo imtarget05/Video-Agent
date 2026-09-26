@@ -9,7 +9,32 @@ from pydantic import BaseModel, Field, BeforeValidator, PlainSerializer
 import math
 
 
+#: Money is quantised to 4 decimal places (0.1-cent) -- finer than any provider
+#: price this project bills at, coarse enough to be a stable storage precision.
+MONEY_SCALE = Decimal("0.0001")
+
+
 def _coerce_money(v: Any) -> Decimal:
+    """Normalise a `Money` input to an exact Decimal.
+
+    The float policy is an EXPLICIT decision, not an accident of pydantic's
+    default coercion:
+
+    * `Decimal` is the intended input and is carried through untouched.
+    * `int` and `str` are exact decimal literals; they are accepted and
+      HALF_UP-quantised to `MONEY_SCALE` (so "0.12345" -> Decimal("0.1235")).
+    * `bool` is rejected outright.
+    * `float` is accepted ONLY when `Decimal(str(v))` is already exact at
+      `MONEY_SCALE`. A float needs rounding => it carries binary
+      representation drift, and drift is rejected rather than silently
+      absorbed. That is what makes the CPFM ledger's "no float drift" claim
+      true end to end instead of only inside the ledger.
+
+    Rejecting drift matters: `0.1 + 0.2` is 0.30000000000000004, and quietly
+    rounding that to 0.3000 hides a real arithmetic bug upstream. Callers that
+    genuinely need a repeating value must pass a `Decimal` or a string and say
+    what precision they mean.
+    """
     if isinstance(v, Decimal):
         d = v
     elif isinstance(v, bool):
@@ -20,6 +45,11 @@ def _coerce_money(v: Any) -> Decimal:
         if math.isnan(v) or math.isinf(v):
             raise ValueError(f"invalid Money value: {v!r}")
         d = Decimal(str(v))
+        if d != d.quantize(MONEY_SCALE, rounding=ROUND_HALF_UP):
+            raise ValueError(
+                f"Money float {v!r} is not exact at {MONEY_SCALE} precision "
+                f"(binary drift); pass a Decimal or a str instead"
+            )
     elif isinstance(v, str):
         s = v.strip()
         if not s:
@@ -36,7 +66,7 @@ def _coerce_money(v: Any) -> Decimal:
         raise ValueError(f"invalid Money value: {v!r}")
     if d < 0:
         raise ValueError(f"Money must be non-negative: {v!r}")
-    return d.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+    return d.quantize(MONEY_SCALE, rounding=ROUND_HALF_UP)
 
 
 Money = Annotated[

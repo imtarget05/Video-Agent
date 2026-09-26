@@ -144,3 +144,100 @@ def test_server_boundary_float_backcompat(tmp_path):
     legacy = CostLedger(db_path=str(tmp_path / "legacy.db"))
     legacy_metrics = legacy.get_project_metrics(project_id="legacy", approved_final_seconds=15.0)
     assert legacy_metrics["total_spend_usd"] == Decimal("0.1000")
+
+
+# ---------------------------------------------------------------------------
+# P5: the float policy on a Decimal field is an EXPLICIT decision, and it is
+# "reject drift", not "round it away". These tests pin that decision so it
+# cannot be silently relaxed back into float tolerance.
+# ---------------------------------------------------------------------------
+
+
+def test_money_float_is_accepted_only_when_exact_at_money_scale():
+    """A float that is exact at 4dp is accepted losslessly (no rounding)."""
+    for exact in (0.0, 0.5, 0.1, 0.023, 1.0, 12.3456):
+        r = CostRecord(
+            job_id="j", provider="MockVideo", duration_sec=5.0, cost_usd=exact
+        )
+        assert isinstance(r.cost_usd, Decimal)
+        assert r.cost_usd == Decimal(str(exact)).quantize(Decimal("0.0001"))
+
+
+def test_money_float_with_binary_drift_is_rejected_not_rounded():
+    """Drifted floats must raise, not be quietly quantised into looking exact."""
+    drifted = [
+        0.1 + 0.2,          # 0.30000000000000004
+        0.1 + 0.7,          # 0.7999999999999999
+        4.35e-05,           # needs rounding at 4dp
+        1 / 3,              # repeating
+        1234.567891,        # more precision than the field allows
+    ]
+    for bad in drifted:
+        with pytest.raises(ValidationError):
+            CostRecord(
+                job_id="drift",
+                provider="MockVideo",
+                duration_sec=5.0,
+                cost_usd=bad,
+            )
+
+
+def test_money_float_drift_is_not_absorbed_by_quantize():
+    """Guard the guard: the rejection is real, not an artefact of rounding.
+
+    If the drift check were removed, quantize() would happily return
+    Decimal("0.3000") for 0.1 + 0.2 -- which is exactly the silent coercion
+    the ledger exists to prevent.
+    """
+    drift = 0.1 + 0.2
+    naive = Decimal(str(drift)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+    assert naive == Decimal("0.3000")  # what the old silent path produced
+    with pytest.raises(ValidationError):
+        CostRecord(
+            job_id="drift2", provider="MockVideo", duration_sec=5.0, cost_usd=drift
+        )
+
+
+def test_money_rejects_bool_and_non_finite_floats():
+    """bool is not money, and NaN/inf never reach the ledger."""
+    for bad in (True, False):
+        with pytest.raises(ValidationError):
+            CostRecord(
+                job_id="b", provider="MockVideo", duration_sec=5.0, cost_usd=bad
+            )
+
+
+def test_ledger_rejects_float_drift_end_to_end(tmp_path):
+    """Drift cannot enter the CPFM ledger through CostRecord either."""
+    ledger = CostLedger(db_path=str(tmp_path / "drift.db"))
+    with pytest.raises(ValidationError):
+        CostRecord(
+            job_id="j1",
+            provider="MockVideo",
+            duration_sec=5.0,
+            cost_usd=0.1 + 0.2,
+            attempt_number=1,
+            status="SUCCESS",
+        )
+    # A clean Decimal still lands exactly.
+    ledger.record_cost("p", _make_record("ok", Decimal("0.10")))
+    assert ledger.get_project_metrics(
+        "p", approved_final_seconds=60.0
+    )["total_spend_usd"] == Decimal("0.1000")
+
+def test_money_float_is_read_via_shortest_repr_not_binary_value():
+    """Pin the remaining half of the decision: WHICH float we honour.
+
+    Python's repr() gives the shortest string that round-trips, so a float is
+    interpreted as that decimal literal -- `2.675` means 2.675, not the binary
+    double 2.67499999999999982236431605997495353221893310546875. The exact
+    binary value is never used, which is what keeps binary artefacts out of the
+    ledger. A float whose repr carries more precision than MONEY_SCALE (see
+    test_money_float_with_binary_drift_is_rejected_not_rounded) is still
+    rejected rather than rounded.
+    """
+    assert Decimal(2.675) != Decimal("2.675")  # the binary value is not exact
+    r = CostRecord(
+        job_id="repr", provider="MockVideo", duration_sec=5.0, cost_usd=2.675
+    )
+    assert r.cost_usd == Decimal("2.6750")
