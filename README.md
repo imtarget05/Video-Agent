@@ -8,7 +8,7 @@
   [![Remotion](https://img.shields.io/badge/Remotion-0B84F3?style=flat-square&logo=react&logoColor=white)](https://www.remotion.dev/)
   [![React 18](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-  [![Tests](https://img.shields.io/badge/Tests-16%20passing-success?style=flat-square)](#)
+  [![Tests](https://img.shields.io/badge/Tests-148%20passed-success?style=flat-square)](#)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 </div>
 
@@ -26,11 +26,11 @@ Unlike naive "prompt-and-pray" wrapper tools that treat AI models as a magic wan
 |---|---|---|---|
 | **1** | **Model is just a swappable layer** | Prompts are the entire system; debate over which model is best | 3-Layer Architecture: (1) Storyboard planning via still keyframes, (2) Swappable video generator (Hugging Face FLUX.1 / Kling / Mock), (3) Remotion code assembly |
 | **2** | **Cost per finished minute (CPFM)** | Only measures "cost per API call"; ignores silent retry burn | SQLite-backed `CostLedger` computing $\text{CPFM} = \frac{\text{Total Spend}}{\text{Finished Min}}$ and Gross-to-Net compute ratios |
-| **3** | **Editing is the real bottleneck (80% value)** | Assumes AI generates a ready-to-publish 60s video | **Remotion (React/TS)** timeline engine: micro-take cuts, kinetic typography, dynamic audio ducking (-18dB during voiceover), transitions |
+| **3** | **Editing is the real bottleneck (80% value)** | Assumes AI generates a ready-to-publish 60s video | **Remotion (React/TS)** timeline engine: micro-take cuts, kinetic typography, dynamic audio ducking (music gain 0.35 -> 0.10, i.e. -10.9 dB under voiceover), transitions |
 | **4** | **Hard tool guardrails > prompt pleading** | Tells LLM in prompt "please don't retry too many times" | Hard-coded tool limiter in Python: max 2 retries on 5xx, **0 retries** on policy violations; Preflight safety & budget checks |
 | **5** | **Character consistency via visual anchors** | Vague descriptions in free text across prompts | `CharacterDNA` manager locking invariant prompt prefixes at position 0, 3-angle visual reference packs, and seed values |
 | **6** | **Moderation as a first-class citizen** | Treats policy rejections as crashes or retries blindly | `MODERATION_BLOCKED` is a native state in LangGraph, routing to safety reformulators or human supervisors |
-| **7** | **Zero-Cost Offline Testing (Anti-AI Washing)** | Cannot run tests without burning paid API credits | Native `MockVideoProvider` & `MockTTSProvider` enabling 100% test coverage and CI/CD verification at **$0 cost** |
+| **7** | **Zero-Cost Offline Testing (Anti-AI Washing)** | Cannot run tests without burning paid API credits | Native `MockVideoProvider` & `MockTTSProvider` so the whole suite and CI run offline at **$0 cost** (no coverage percentage is claimed; none is measured) |
 
 ---
 
@@ -102,7 +102,7 @@ Video-Agent/
 │   │       ├── server.py       # FastAPI REST API (Projects, HITL, Jobs, Cost Audit, Deliver/Subscribe)
 │   │       ├── store.py        # SQLite ProjectStore (list/status persistence)
 │   │       └── webhooks.py     # HMAC sign/verify + dispatch (max 2 retries)
-│   ├── tests/                  # Pytest unit & integration suite (16 tests)
+│   ├── tests/                  # Pytest unit & integration suite (150 tests)
 │   └── requirements.txt        # Python backend dependencies
 ├── remotion/
 │   ├── src/
@@ -113,6 +113,8 @@ Video-Agent/
 │   │   │   └── AudioTrack.tsx  # Dynamic speech audio ducking component
 │   │   ├── Root.tsx            # Composition registration (Shorts916 & Landscape169)
 │   │   └── types.ts            # Manifest & scene interfaces
+│   ├── scripts/
+│   │   └── generate_placeholder_audio.mjs # Synthetic placeholder audio (NOT licensed media)
 │   ├── package.json
 │   └── remotion.config.ts
 ├── scripts/
@@ -192,13 +194,67 @@ npm run bundle
 npm run start
 ```
 
+#### Render the demo video
+
+```bash
+cd remotion
+
+# Synthesise the placeholder audio the default compositions reference
+npm run placeholder-audio
+
+# Render Shorts916 (534 frames @ 30fps) to an MP4
+npm run build          # -> remotion/out/shorts.mp4
+```
+
+> **The audio in the default compositions is a placeholder, not media.**
+> `remotion/public/audio/` is empty in a fresh clone because this project has no
+> licence to redistribute third-party audio, so nothing is vendored. The default
+> `Shorts916` / `Landscape169` manifests in `remotion/src/Root.tsx` need four
+> files, and without them the render aborts on frame 1 with a 404 for
+> `public/audio/bg_music.wav`.
+>
+> `npm run placeholder-audio` (`remotion/scripts/generate_placeholder_audio.mjs`,
+> Node stdlib only) synthesises all four locally: a quiet three-note sine bed for
+> `bg_music.wav` and a gated 130 Hz hum for each `speech_scene_N.wav`, purely so
+> the audio-ducking envelope is audible in a demo. **It is synthetic tone, not
+> music and not speech.** Drop real, licensed media into
+> `remotion/public/audio/` under the same names and it is used instead — the
+> generator never overwrites an existing file unless you pass `--force`. The WAVs
+> are covered by `.gitignore`, so no binary media is committed. The live TTS
+> path is unaffected: Edge-TTS still writes real `speech_scene_N.mp3`.
+
 ---
 
 ## 🛡️ Benchmark & Verification Results
 
-- **Backend Pytest Suite**: `16 passed in 0.32s` (100% passing).
-- **Remotion Bundle Verification**: `100% Bundled code in 7181ms` without TypeScript or runtime errors.
-- **Cost Efficiency**: Pre-production keyframe filtering demonstrates a **60%+ reduction** in Cost Per Finished Minute compared to naive unanchored video generation.
+Every number below was measured on the maintainer's machine on **2026-09-26**
+(Windows 11, Node 24.19.0, Python 3.11.0, 4x render concurrency). They are
+local measurements, not a published benchmark, and they will differ on other
+hardware.
+
+- **Backend Pytest Suite**: `148 passed, 2 skipped` out of **150 collected**, 0 failed.
+- **Remotion Bundle** (`npx remotion bundle src/index.ts`): exit 0 in **5.4 s**, no
+  TypeScript or runtime errors.
+- **Video render** (`npm run build`, composition `Shorts916`): exit 0 in **49.9 s**,
+  534/534 frames encoded, `remotion/out/shorts.mp4` = **~18.3 MB** (the exact
+  byte count drifts by a few hundred between runs, which is normal for the h264
+  encoder).
+  CI runs this render on every push, so a render that cannot complete now fails
+  the build instead of passing silently.
+- **CPFM ledger precision**: `cost_usd` is stored as `TEXT` and every sum and
+  divide runs in `decimal.Decimal` — never SQL `SUM()`, which would coerce the
+  column back to `REAL` and reintroduce drift. Money fields accept `Decimal`,
+  `int` and `str` exactly; a `float` is accepted **only** when it is already
+  exact at 4 decimal places, so binary drift such as `0.1 + 0.2` is **rejected**
+  rather than silently rounded. Proven in
+  `backend/tests/test_decimal_precision.py`.
+- **Cost Efficiency (CPFM)**: **unmeasured claim.** Keyframe-first planning is
+  *designed* to cut CPFM by rejecting expensive clip generations before they are
+  rendered, but no A/B run against a naive unanchored baseline has been
+  performed, so **no "60%+ reduction" figure is asserted here**. What the repo
+  does provide is the measurement instrument: `CostLedger` reports
+  `cost_per_finished_minute`, `retry_ratio` and `gross_to_net_ratio` for whatever
+  run you point it at. Comparing that against a naive baseline is left to you.
 
 ---
 
@@ -223,8 +279,15 @@ Chi tiết: xem `docs/DEPLOYMENT_CLOUD_FIRST.md`.
 
 ## 🛡️ API / Job / Delivery Safety (plan 2026-09-18)
 
-- **Auth bắt buộc**: mọi mutation cần `X-API-Key` (`API_KEY`); production
-  fail-closed khi thiếu key hoặc `CORS_ORIGINS` (không wildcard + credentials).
+- **Auth bắt buộc**: mọi mutation cần `X-API-Key` (`API_KEY`), so sánh bằng
+  `secrets.compare_digest` (constant-time) chứ không phải `!=`. **Fail-closed
+  ngoài development**: nếu `API_KEY` chưa set mà `APP_ENV` là
+  `staging`/`production`, mọi protected request trả **503** kèm message rõ
+  ràng thay vì mở cửa — trước đây thiếu key là `return True`, tức mọi route
+  mở cho bất kỳ ai. `production` còn fail lúc khởi động nếu thiếu `API_KEY` hoặc
+  `CORS_ORIGINS` (không wildcard + credentials). `development` là ngoại lệ
+  **có chủ đích và được ghi rõ** để demo offline và test suite chạy không cần
+  secret; đặt `API_KEY` trong development là enforce y hệt production.
 - **Provider trung thực**: không còn `SUCCEEDED` mặc định. Mỗi provider submit
   và giữ remote job id; mock clip luôn `mode=mock` + cost 0, không bao giờ bị
   gắn nhãn cloud render.
