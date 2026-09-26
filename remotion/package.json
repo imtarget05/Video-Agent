@@ -4,6 +4,8 @@
   "description": "Code-based video assembly and composition engine for Video-Agent",
   "scripts": {
     "start": "remotion preview src/index.ts",
+    "placeholder-audio": "node scripts/generate_placeholder_audio.mjs",
+    "prebuild": "npm run placeholder-audio",
     "build": "remotion render src/index.ts Shorts916 out/shorts.mp4",
     "bundle": "remotion bundle src/index.ts"
   },

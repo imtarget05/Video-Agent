@@ -61,7 +61,7 @@ jobs:
           python -c "import json; m=json.load(open('remotion/render_manifest.json')); assert 'scenes' in m or 'totalDurationSec' in m, 'invalid manifest'; print('manifest OK:', len(m.get('scenes', [])))"
 
   remotion-check:
-    name: Remotion Bundle & TypeScript Check (Node.js)
+    name: Remotion Bundle & Render (Node.js)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -81,3 +81,29 @@ jobs:
       - name: Verify Remotion Bundle
         working-directory: remotion
         run: npx remotion bundle src/index.ts
+
+      # The default compositions ship with no vendored media, so a render needs
+      # the synthetic placeholder audio first. These are NOT licensed media; see
+      # remotion/scripts/generate_placeholder_audio.mjs.
+      - name: Generate placeholder audio
+        working-directory: remotion
+        run: npm run placeholder-audio
+
+      # `remotion bundle` alone cannot catch a broken render: the composition
+      # referenced four audio assets that were never committed, so the video had
+      # never actually rendered and CI stayed green. This step is the regression
+      # gate -- it fails the build on any non-zero render exit code.
+      - name: Render Shorts916 to MP4
+        working-directory: remotion
+        run: npm run build
+
+      - name: Assert rendered MP4 exists and is non-trivial
+        working-directory: remotion
+        run: |
+          test -f out/shorts.mp4
+          size=$(stat -c%s out/shorts.mp4)
+          echo "rendered out/shorts.mp4 = ${size} bytes"
+          if [ "$size" -lt 100000 ]; then
+            echo "::error::rendered MP4 is only ${size} bytes - render did not produce real output"
+            exit 1
+          fi

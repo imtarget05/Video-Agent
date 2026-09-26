@@ -3,6 +3,10 @@ import { Composition } from "remotion";
 import { MainVideo } from "./compositions/MainVideo";
 import { VideoManifest } from "./types";
 
+// The default demo manifest below ships with NO vendored media. The four audio
+// files it references are synthetic placeholders produced by
+// `npm run placeholder-audio` (remotion/scripts/generate_placeholder_audio.mjs).
+// Replace them with real, licensed media of the same names before publishing.
 const defaultManifest916: VideoManifest = {
   projectId: "ai_income_2026",
   aspectRatio: "9:16",
@@ -15,7 +19,7 @@ const defaultManifest916: VideoManifest = {
       durationSec: 5.2,
       imageUrl: "images/scene_1.jpg",
       kenBurnsEffect: "zoomIn",
-      audioUrl: "audio/speech_scene_1.mp3",
+      audioUrl: "audio/speech_scene_1.wav",
       voiceover: "Bạn có biết điều này về 3 cách kiếm tiền bằng AI năm 2026 không?",
       subtitles: [
         { word: "BẠN", start: 0.1, end: 0.5 },
@@ -35,7 +39,7 @@ const defaultManifest916: VideoManifest = {
       durationSec: 6.8,
       imageUrl: "images/scene_2.jpg",
       kenBurnsEffect: "panLeft",
-      audioUrl: "audio/speech_scene_2.mp3",
+      audioUrl: "audio/speech_scene_2.wav",
       voiceover: "Đây là giải pháp công nghệ giúp tối ưu hóa toàn diện tự động hóa với AI.",
       subtitles: [
         { word: "ĐÂY", start: 0.1, end: 0.6 },
@@ -56,7 +60,7 @@ const defaultManifest916: VideoManifest = {
       durationSec: 5.8,
       imageUrl: "images/scene_3.jpg",
       kenBurnsEffect: "zoomOut",
-      audioUrl: "audio/speech_scene_3.mp3",
+      audioUrl: "audio/speech_scene_3.wav",
       voiceover: "Theo dõi ngay để cập nhật thêm nhiều giải pháp tự động hóa đột phá!",
       subtitles: [
         { word: "THEO", start: 0.1, end: 0.6 },
