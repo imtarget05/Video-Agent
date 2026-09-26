@@ -7,6 +7,7 @@ import asyncio
 import json
 import os
 import re
+import secrets
 import subprocess
 from pathlib import Path
 from typing import Dict, Any, Optional, List
@@ -80,12 +81,35 @@ _RATE_BUCKETS: Dict[str, List[float]] = {}
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
 
 
+def _app_env() -> str:
+    return os.getenv("APP_ENV", os.getenv("ENVIRONMENT", "development")).strip().lower()
+
+
 def require_api_key(x_api_key: Optional[str] = Header(default=None)):
-    """Require the configured API key whenever API_KEY is configured."""
-    expected = os.getenv("API_KEY", "")
+    """Fail-closed API key check for every protected route.
+
+    Three deliberate rules:
+
+    1. An unset `API_KEY` is never a silent allow outside development. When the
+       key is missing and `APP_ENV` is staging/production the request is refused
+       with 503 and an explicit message, so "no key configured" can never be
+       mistaken for "key supplied and correct".
+    2. The comparison is `secrets.compare_digest`, so a wrong key cannot be
+       recovered byte-by-byte from response timing.
+    3. Development is the one documented exception: with no `API_KEY` set the
+       protected routes stay open so the offline demo and the test suite run
+       without provisioning a secret. Set `API_KEY` in development and you get
+       the same enforcement as production.
+    """
+    expected = os.getenv("API_KEY", "").strip()
     if not expected:
+        if _app_env() in ("production", "prod", "staging"):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="API_KEY is not configured; refusing request (fail-closed)",
+            )
         return True
-    if x_api_key != expected:
+    if not x_api_key or not secrets.compare_digest(x_api_key, expected):
         raise HTTPException(status_code=401, detail="Invalid API key")
     return True
 
